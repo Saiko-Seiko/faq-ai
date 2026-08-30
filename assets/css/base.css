@@ -1,0 +1,238 @@
+/* ============================================================
+   共通スタイル — AI採用デモ
+   デザイントークンをここに集約。配色変更は :root だけで完結する。
+   ============================================================ */
+
+:root {
+  color-scheme: light dark;
+
+  /* 面 */
+  --bg:          #f4f6f8;
+  --surface:     #ffffff;
+  --surface-2:   #eef1f5;
+  --border:      #d8dee6;
+  --border-soft: #e7ecf1;
+
+  /* 文字 */
+  --text:        #16212e;
+  --text-muted:  #5b6b7c;
+  --text-faint:  #8a99a8;
+
+  /* アクセント */
+  --accent:      #0b7285;
+  --accent-hov:  #095c6b;
+  --accent-soft: #e2f2f5;
+  --accent-fg:   #ffffff;
+
+  /* 状態 */
+  --ok:      #1a7f4b;
+  --ok-soft: #e3f4ea;
+  --warn:      #9a6510;
+  --warn-soft: #fbf0da;
+  --danger:      #a63232;
+  --danger-soft: #fbe6e6;
+
+  --radius:    10px;
+  --radius-lg: 16px;
+  --shadow:    0 1px 2px rgba(16,32,48,.06), 0 6px 20px rgba(16,32,48,.06);
+  --shadow-lg: 0 2px 6px rgba(16,32,48,.08), 0 18px 44px rgba(16,32,48,.12);
+
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN",
+          "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", Meiryo, sans-serif;
+
+  --wrap: 1180px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:          #10161d;
+    --surface:     #18212b;
+    --surface-2:   #1f2a36;
+    --border:      #2c3a49;
+    --border-soft: #243040;
+
+    --text:        #e6edf4;
+    --text-muted:  #9fb0c2;
+    --text-faint:  #74869a;
+
+    --accent:      #3aa8bd;
+    --accent-hov:  #4fbdd1;
+    --accent-soft: #17323a;
+    --accent-fg:   #06222a;
+
+    --ok:      #5ecf95;
+    --ok-soft: #14301f;
+    --warn:      #e0b062;
+    --warn-soft: #33280f;
+    --danger:      #f08a8a;
+    --danger-soft: #331a1a;
+
+    --shadow:    0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.3);
+    --shadow-lg: 0 2px 6px rgba(0,0,0,.45), 0 18px 44px rgba(0,0,0,.4);
+  }
+}
+
+/* ---------- リセット ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+img, video { max-width: 100%; display: block; }
+button, input, textarea, select { font: inherit; color: inherit; }
+a { color: var(--accent); }
+h1, h2, h3, h4 { line-height: 1.4; margin: 0; font-weight: 700; letter-spacing: .01em; }
+
+/* ---------- レイアウト ---------- */
+.wrap { width: min(100% - 32px, var(--wrap)); margin-inline: auto; }
+.stack > * + * { margin-top: var(--gap, 16px); }
+
+/* ---------- ヘッダー ---------- */
+.site-header {
+  position: sticky; top: 0; z-index: 40;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(1.6) blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.site-header__inner {
+  display: flex; align-items: center; gap: 12px;
+  min-height: 58px;
+  width: min(100% - 32px, var(--wrap)); margin-inline: auto;
+}
+.brand {
+  display: flex; align-items: center; gap: 9px;
+  font-weight: 700; text-decoration: none; color: var(--text);
+  font-size: 15px; white-space: nowrap;
+}
+.brand__mark {
+  width: 26px; height: 26px; border-radius: 7px; flex: none;
+  background: var(--accent); color: var(--accent-fg);
+  display: grid; place-items: center; font-size: 12px; font-weight: 800;
+}
+.site-header__spacer { flex: 1; }
+.site-nav { display: flex; gap: 2px; }
+.site-nav a {
+  padding: 6px 11px; border-radius: 7px; text-decoration: none;
+  color: var(--text-muted); font-size: 13.5px; font-weight: 600; white-space: nowrap;
+}
+.site-nav a:hover { background: var(--surface-2); color: var(--text); }
+.site-nav a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
+
+/* ---------- デモ帯 ---------- */
+.demo-banner {
+  background: var(--warn-soft); color: var(--warn);
+  border-bottom: 1px solid color-mix(in srgb, var(--warn) 25%, transparent);
+  font-size: 12.5px; font-weight: 600; text-align: center;
+  padding: 7px 16px; line-height: 1.5;
+}
+
+/* ---------- ボタン ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 9px 17px; border-radius: 9px; border: 1px solid transparent;
+  background: var(--accent); color: var(--accent-fg);
+  font-size: 14px; font-weight: 700; cursor: pointer; text-decoration: none;
+  transition: background .15s, border-color .15s, opacity .15s;
+}
+.btn:hover { background: var(--accent-hov); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn--ghost { background: transparent; border-color: var(--border); color: var(--text); }
+.btn--ghost:hover { background: var(--surface-2); }
+.btn--sm { padding: 6px 12px; font-size: 13px; border-radius: 8px; }
+.btn--block { width: 100%; }
+.btn--danger { background: var(--danger); }
+.btn--ok { background: var(--ok); }
+
+/* ---------- カード ---------- */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow);
+}
+.card__pad { padding: 20px; }
+
+/* ---------- バッジ ---------- */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 700; line-height: 1.6;
+  background: var(--surface-2); color: var(--text-muted);
+  border: 1px solid var(--border-soft); white-space: nowrap;
+}
+.badge--accent { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.badge--ok     { background: var(--ok-soft);     color: var(--ok);     border-color: transparent; }
+.badge--warn   { background: var(--warn-soft);   color: var(--warn);   border-color: transparent; }
+.badge--danger { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+
+/* ---------- フォーム ---------- */
+.field { display: block; }
+.field__label { display: block; font-size: 12.5px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; }
+.input, .textarea {
+  width: 100%; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 9px;
+  background: var(--surface); color: var(--text);
+  font-size: 14.5px; line-height: 1.7;
+}
+.textarea { resize: vertical; min-height: 108px; }
+.input:focus, .textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+.hint { font-size: 12px; color: var(--text-faint); line-height: 1.65; }
+
+/* ---------- モーダル ---------- */
+.modal[hidden] { display: none !important; }
+.modal {
+  position: fixed; inset: 0; z-index: 90;
+  display: grid; place-items: center; padding: 16px;
+  background: rgba(8,14,20,.55);
+}
+.modal__box {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+  width: min(100%, 480px); max-height: 90vh; overflow: auto; padding: 22px;
+}
+
+/* ---------- 注記ボックス ---------- */
+.note {
+  border-radius: var(--radius); padding: 12px 14px;
+  font-size: 13px; line-height: 1.7;
+  background: var(--surface-2); border: 1px solid var(--border-soft); color: var(--text-muted);
+}
+.note--warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+.note--accent { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+
+/* ---------- フッター ---------- */
+.site-footer {
+  margin-top: 56px; padding: 24px 0 40px;
+  border-top: 1px solid var(--border);
+  color: var(--text-faint); font-size: 12.5px;
+}
+
+/* ---------- ユーティリティ ---------- */
+.muted { color: var(--text-muted); }
+.faint { color: var(--text-faint); }
+.center { text-align: center; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ---------- モード切替（設定モーダル） ---------- */
+.mode-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-faint); flex: none;
+}
+.mode-dot--live { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
+
+.mode-option {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer;
+}
+.mode-option:hover { background: var(--surface-2); }
+.mode-option input { margin-top: 5px; flex: none; }
+.mode-option strong { display: block; font-size: 14px; }
+.mode-option .hint { display: block; margin-top: 2px; }

@@ -12,7 +12,24 @@
 
 ## 現在の状況
 
-Phase 0（土台）着手前。進捗は [docs/03-roadmap.md](docs/03-roadmap.md) のチェックボックスが唯一の正。
+**Phase 0（土台）と Phase 1（会社説明会ページ）が完成。** Phase 2・3 は導線のみの準備中ページ。
+進捗は [docs/03-roadmap.md](docs/03-roadmap.md) のチェックボックスが唯一の正。
+
+| 画面 | ファイル | 状態 |
+|---|---|---|
+| トップ | `index.html` | 完成 |
+| ① 会社説明会（動画＋チャット） | `briefing.html` | 完成 |
+| ② AI面接官 | `interview.html` | 準備中（Phase 2） |
+| ③ 人事ダッシュボード | `dashboard.html` | 準備中（Phase 3） |
+
+### 動かし方
+
+ビルド不要。`index.html` をブラウザで開くだけで動く（`file://` でも可）。
+GitHub Pages に置けば、そのまま公開URLになる。
+
+> **動画はプレースホルダー**です。`briefing.html` の `.player__stage` と
+> `assets/js/briefing.js` の `Player` を `<video>` に差し替える前提で作ってあり、
+> チャプターの時刻はそのまま `video.currentTime` に対応する。
 
 ## ドキュメント
 

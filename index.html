@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI採用システム デモ｜会社説明会チャット・AI面接官</title>
+<meta name="description" content="AI人事担当者による24時間対応の会社説明会と、AI面接官によるオンライン一次面接のデモ。">
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="assets/css/base.css">
+<style>
+  .hero { padding: 56px 0 40px; }
+  .hero__eyebrow {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12.5px; font-weight: 700; color: var(--accent);
+    background: var(--accent-soft); padding: 4px 12px; border-radius: 999px;
+  }
+  .hero h1 {
+    font-size: clamp(26px, 5.2vw, 40px);
+    letter-spacing: -.01em; margin: 16px 0 0; max-width: 20em;
+  }
+  .hero p.lead {
+    font-size: clamp(15px, 2.2vw, 17px); color: var(--text-muted);
+    margin: 14px 0 0; max-width: 44em;
+  }
+
+  .cards {
+    display: grid; gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(272px, 1fr));
+    margin-top: 34px;
+  }
+  .feature {
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 22px; text-decoration: none; color: inherit;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow);
+    transition: transform .16s, box-shadow .16s, border-color .16s;
+  }
+  .feature:hover {
+    transform: translateY(-2px); box-shadow: var(--shadow-lg);
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  }
+  .feature__num {
+    width: 30px; height: 30px; border-radius: 9px; flex: none;
+    background: var(--accent-soft); color: var(--accent);
+    display: grid; place-items: center; font-weight: 800; font-size: 14px;
+  }
+  .feature h2 { font-size: 17px; }
+  .feature p { margin: 0; font-size: 13.5px; color: var(--text-muted); line-height: 1.75; }
+  .feature__go { margin-top: auto; padding-top: 6px; font-size: 13px; font-weight: 700; color: var(--accent); }
+
+  .points { margin-top: 44px; display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .point { padding: 18px 20px; border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 var(--radius) var(--radius) 0; }
+  .point h3 { font-size: 14px; margin-bottom: 4px; }
+  .point p { margin: 0; font-size: 13px; color: var(--text-muted); line-height: 1.75; }
+
+  .section-title { margin-top: 48px; font-size: 13px; font-weight: 700; color: var(--text-faint); letter-spacing: .08em; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header__inner">
+    <a class="brand" href="index.html"><span class="brand__mark">AI</span>AI採用システム</a>
+    <span class="site-header__spacer"></span>
+    <nav class="site-nav">
+      <a href="briefing.html">会社説明会</a>
+      <a href="interview.html?token=demo-tanaka">AI面接</a>
+      <a href="dashboard.html">人事画面</a>
+    </nav>
+    <span data-settings-slot></span>
+  </div>
+</header>
+
+<p class="demo-banner">
+  これは提案用のデモです。登場する会社名・数値・候補者情報はすべて架空のものです。
+</p>
+
+<main class="wrap">
+
+  <section class="hero">
+    <span class="hero__eyebrow">AI人事担当者 ＋ AI面接官</span>
+    <h1>説明会は24時間、一次面接は自動で。<br>人事の時間を、人にしかできない仕事へ。</h1>
+    <p class="lead">
+      会社説明の動画をいつでも視聴でき、その場でAIが質問に答えます。
+      一次面接はAIが担当し、回答内容をスコアと所見にまとめて人事へ引き渡します。
+      合否を決めるのは、最後まで人です。
+    </p>
+  </section>
+
+  <div class="cards">
+    <a class="feature" href="briefing.html">
+      <span class="feature__num">1</span>
+      <h2>AI人事担当者による会社説明会</h2>
+      <p>
+        会社説明の動画を24時間いつでも視聴でき、見ながらチャットで質問できます。
+        福利厚生・選考フロー・働き方など、事前に覚えさせた情報から即座に回答します。
+      </p>
+      <span class="feature__go">デモを見る →</span>
+    </a>
+
+    <a class="feature" href="interview.html?token=demo-tanaka">
+      <span class="feature__num">2</span>
+      <h2>AI面接官によるオンライン面接</h2>
+      <p>
+        求職者へお送りする個別URLから、ブラウザだけで面接が完結します。
+        AIが質問し、回答を4つの観点で分析してスコア化します。
+      </p>
+      <span class="feature__go">候補者として体験する →</span>
+    </a>
+
+    <a class="feature" href="dashboard.html">
+      <span class="feature__num">3</span>
+      <h2>人事担当者ダッシュボード</h2>
+      <p>
+        候補者ごとの全問答ログとAIの所見を確認し、
+        <strong>合否は人事担当者が決定します</strong>。AIの評価はあくまで参考値です。
+      </p>
+      <span class="feature__go">人事画面を見る →</span>
+    </a>
+  </div>
+
+  <h2 class="section-title">この仕組みの考え方</h2>
+  <div class="points">
+    <div class="point">
+      <h3>AIは落とさない</h3>
+      <p>AIが担当するのは一次スクリーニングとスコア化まで。合否の決定は必ず人が行う設計にしています。「なぜ不合格だったのか」を説明できる状態を保つためです。</p>
+    </div>
+    <div class="point">
+      <h3>回答は必ず残る</h3>
+      <p>候補者の全問答・所要時間・スコア内訳を保存し、人事画面からいつでも読み返せます。後から判断を検証できることが、AI面接の納得感につながります。</p>
+    </div>
+    <div class="point">
+      <h3>スマホで完結する</h3>
+      <p>説明会も面接も、アプリのインストールや会員登録は不要です。送られてきたURLを開くだけで、スマートフォンから利用できます。</p>
+    </div>
+  </div>
+
+  <h2 class="section-title">デモの動作モード</h2>
+  <div class="note" style="margin-top:10px">
+    右上のボタンから切り替えられます。<br>
+    <strong>デモモード（既定）</strong>… APIキー不要。登録済みのナレッジから回答します。通信環境に左右されず必ず動作します。<br>
+    <strong>ライブモード</strong>… Claude API を実際に呼び出します。APIキーの入力が必要です。
+  </div>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    AI採用システム デモ ／ 提案用のプロトタイプです。実在の企業・個人とは関係ありません。
+  </div>
+</footer>
+
+<script src="assets/js/app.js"></script>
+</body>
+</html>

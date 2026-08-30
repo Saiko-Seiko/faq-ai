@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI面接（準備中）｜AI採用システム デモ</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="assets/css/base.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header__inner">
+    <a class="brand" href="index.html"><span class="brand__mark">AI</span>AI採用システム</a>
+    <span class="site-header__spacer"></span>
+    <nav class="site-nav">
+      <a href="briefing.html">会社説明会</a>
+      <a href="interview.html?token=demo-tanaka" aria-current="page">AI面接</a>
+      <a href="dashboard.html">人事画面</a>
+    </nav>
+    <span data-settings-slot></span>
+  </div>
+</header>
+
+<p class="demo-banner">これは提案用のデモです。</p>
+
+<main class="wrap" style="padding:56px 0">
+  <div class="card card__pad stack" style="max-width:600px;margin-inline:auto">
+    <span class="badge badge--warn">Phase 2 で実装予定</span>
+    <h1 style="font-size:22px">AI面接官</h1>
+    <p class="muted" style="margin:0">
+      候補者へお送りする個別URL（<code>interview.html?token=…</code>）から、
+      ブラウザだけで面接が完結する画面です。AIが5問前後を質問し、
+      回答を4つの観点で分析してスコア化します。
+    </p>
+    <div class="note note--accent">
+      設計上の要点：面接の終了画面では<strong>その場で合否を表示しません</strong>。
+      AIはスコアと所見の作成までを担当し、合否は人事担当者が決定します。
+    </div>
+    <a class="btn btn--ghost" href="index.html">トップへ戻る</a>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">AI採用システム デモ ／ 提案用のプロトタイプです。</div>
+</footer>
+
+<script src="assets/js/app.js"></script>
+</body>
+</html>

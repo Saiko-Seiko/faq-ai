@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>会社説明会｜AI人事担当者が24時間お答えします</title>
+<meta name="description" content="会社説明会の動画を24時間いつでも視聴でき、その場でAIが質問にお答えします。">
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="assets/css/base.css">
+<style>
+  .page-head { padding: 26px 0 18px; }
+  .page-head h1 { font-size: clamp(20px, 3.6vw, 26px); }
+  .page-head p { margin: 8px 0 0; color: var(--text-muted); font-size: 14px; max-width: 46em; }
+
+  .layout {
+    display: grid; gap: 18px; align-items: start;
+    grid-template-columns: minmax(0, 1fr) 390px;
+    padding-bottom: 40px;
+  }
+  @media (max-width: 940px) {
+    .layout { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  /* ---------- 動画プレーヤー ---------- */
+  /* ★差し替えポイント★ 本番は下の .player__stage を <video> に置き換える。
+     チャプターの時刻はそのまま video.currentTime に対応させられる構造にしてある。 */
+  .player__stage {
+    position: relative; aspect-ratio: 16 / 9; overflow: hidden;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    background:
+      radial-gradient(120% 90% at 18% 12%, #1d5f6d 0%, transparent 58%),
+      radial-gradient(120% 110% at 88% 88%, #123449 0%, transparent 60%),
+      #0e2430;
+    display: grid; place-items: center; color: #eaf4f7; text-align: center;
+  }
+  .player__slide { padding: 24px; }
+  .player__slide .kicker { font-size: 12px; letter-spacing: .16em; opacity: .65; font-weight: 700; }
+  .player__slide .title { font-size: clamp(19px, 3.4vw, 30px); font-weight: 800; margin-top: 8px; }
+  .player__slide .sub { font-size: 13px; opacity: .72; margin-top: 8px; }
+
+  .player__ph {
+    position: absolute; left: 12px; top: 12px;
+    font-size: 11px; font-weight: 700; letter-spacing: .04em;
+    background: rgba(0,0,0,.42); color: #fff;
+    padding: 4px 9px; border-radius: 999px; backdrop-filter: blur(4px);
+  }
+  .player__play {
+    position: absolute; inset: 0; width: 100%; border: 0; cursor: pointer;
+    background: transparent; display: grid; place-items: center;
+  }
+  .player__play span {
+    width: 62px; height: 62px; border-radius: 50%;
+    background: rgba(255,255,255,.94); color: #10303c;
+    display: grid; place-items: center; font-size: 22px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.34);
+    transition: transform .16s;
+  }
+  .player__play:hover span { transform: scale(1.07); }
+  .player__play[data-playing="true"] span { opacity: 0; }
+  .player__play[data-playing="true"]:hover span { opacity: .9; }
+
+  .player__bar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 14px; background: var(--surface);
+    border-top: 1px solid var(--border-soft);
+  }
+  .player__seek {
+    flex: 1; height: 5px; border-radius: 3px; background: var(--surface-2);
+    overflow: hidden; cursor: pointer;
+  }
+  .player__seek i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s linear; }
+  .player__time { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .chapters { list-style: none; margin: 0; padding: 6px; display: grid; gap: 2px; }
+  .chapters li { display: flex; }
+  .chapter {
+    flex: 1; display: flex; align-items: center; gap: 11px; text-align: left;
+    padding: 9px 11px; border-radius: 9px; border: 0; background: transparent;
+    cursor: pointer; font-size: 13.5px; color: var(--text);
+  }
+  .chapter:hover { background: var(--surface-2); }
+  .chapter[aria-current="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+  .chapter time { font-size: 12px; color: var(--text-faint); font-variant-numeric: tabular-nums; flex: none; }
+  .chapter[aria-current="true"] time { color: inherit; }
+  .chapter span { flex: 1; }
+  .chapter-ask {
+    flex: none; align-self: center; margin-right: 5px;
+    padding: 5px 10px; border-radius: 999px; cursor: pointer;
+    font-size: 11.5px; font-weight: 700;
+    border: 1px solid var(--border); background: transparent; color: var(--text-faint);
+  }
+  .chapter-ask:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+  /* ---------- チャット ---------- */
+  .chat {
+    display: flex; flex-direction: column;
+    height: min(78vh, 700px);
+    position: sticky; top: 74px;
+  }
+  @media (max-width: 940px) { .chat { position: static; height: min(80vh, 620px); } }
+
+  .chat__head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 13px 16px; border-bottom: 1px solid var(--border-soft);
+  }
+  .chat__avatar {
+    width: 34px; height: 34px; border-radius: 50%; flex: none;
+    background: var(--accent); color: var(--accent-fg);
+    display: grid; place-items: center; font-size: 13px; font-weight: 800;
+  }
+  .chat__who strong { display: block; font-size: 14px; }
+  .chat__who span { font-size: 11.5px; color: var(--text-muted); }
+
+  .chat__log { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+  .msg { display: flex; gap: 9px; max-width: 100%; }
+  .msg__bubble {
+    padding: 10px 13px; border-radius: 14px; font-size: 14px; line-height: 1.8;
+    max-width: 84%; word-break: break-word; white-space: pre-wrap;
+  }
+  .msg--ai .msg__bubble { background: var(--surface-2); border-top-left-radius: 4px; }
+  .msg--me { justify-content: flex-end; }
+  .msg--me .msg__bubble { background: var(--accent); color: var(--accent-fg); border-top-right-radius: 4px; }
+
+  .msg__src { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 5px; }
+
+  .typing { display: inline-flex; gap: 4px; padding: 4px 2px; }
+  .typing i {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint);
+    animation: blink 1.3s infinite ease-in-out;
+  }
+  .typing i:nth-child(2) { animation-delay: .18s; }
+  .typing i:nth-child(3) { animation-delay: .36s; }
+  @keyframes blink { 0%, 60%, 100% { opacity: .25 } 30% { opacity: 1 } }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 12px; }
+  .chip {
+    padding: 6px 12px; border-radius: 999px; cursor: pointer; font-size: 12.5px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text-muted);
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+  .chat__form {
+    display: flex; gap: 8px; align-items: flex-end;
+    padding: 12px 14px; border-top: 1px solid var(--border-soft);
+  }
+  .chat__form textarea {
+    flex: 1; resize: none; max-height: 120px; min-height: 42px;
+    padding: 10px 12px; border: 1px solid var(--border); border-radius: 11px;
+    background: var(--surface); font-size: 14.5px; line-height: 1.6;
+  }
+  .chat__form textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  .chat__send { flex: none; width: 42px; height: 42px; padding: 0; border-radius: 11px; font-size: 17px; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header__inner">
+    <a class="brand" href="index.html"><span class="brand__mark">AI</span>AI採用システム</a>
+    <span class="site-header__spacer"></span>
+    <nav class="site-nav">
+      <a href="briefing.html" aria-current="page">会社説明会</a>
+      <a href="interview.html?token=demo-tanaka">AI面接</a>
+      <a href="dashboard.html">人事画面</a>
+    </nav>
+    <span data-settings-slot></span>
+  </div>
+</header>
+
+<p class="demo-banner">
+  これは提案用のデモです。動画はプレースホルダー、会社情報はすべて架空のものです。
+</p>
+
+<main class="wrap">
+
+  <div class="page-head">
+    <h1>会社説明会</h1>
+    <p>
+      動画は24時間いつでもご覧いただけます。視聴中でも視聴後でも、
+      右のチャットからAI人事担当者に質問できます。予約も受付時間の制限もありません。
+    </p>
+  </div>
+
+  <div class="layout">
+
+    <!-- ============ 動画 ============ -->
+    <div>
+      <div class="card" style="overflow:hidden">
+        <div class="player__stage">
+          <span class="player__ph">動画プレースホルダー（本番は実際の説明会動画に差し替え）</span>
+          <div class="player__slide">
+            <div class="kicker" id="slideKicker">CHAPTER 1</div>
+            <div class="title" id="slideTitle">代表あいさつ</div>
+            <div class="sub" id="slideSub">株式会社アオゾラワークス 会社説明会</div>
+          </div>
+          <button class="player__play" id="playBtn" type="button" data-playing="false" aria-label="再生">
+            <span>▶</span>
+          </button>
+        </div>
+        <div class="player__bar">
+          <button class="btn btn--ghost btn--sm" id="playBtn2" type="button" style="width:36px;padding:0">▶</button>
+          <div class="player__seek" id="seek"><i id="seekFill"></i></div>
+          <div class="player__time"><span id="tNow">0:00</span> / <span id="tAll">0:00</span></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <div style="padding:14px 16px 4px;font-size:12px;font-weight:700;color:var(--text-faint);letter-spacing:.06em">
+          チャプター（クリックで移動・そのまま質問できます）
+        </div>
+        <ul class="chapters" id="chapters"></ul>
+      </div>
+    </div>
+
+    <!-- ============ チャット ============ -->
+    <div class="card chat">
+      <div class="chat__head">
+        <div class="chat__avatar">AI</div>
+        <div class="chat__who">
+          <strong>AI人事担当</strong>
+          <span id="chatStatus">24時間対応・デモモード</span>
+        </div>
+      </div>
+
+      <div class="chat__log" id="log" aria-live="polite"></div>
+
+      <div class="chips" id="chips"></div>
+
+      <form class="chat__form" id="chatForm">
+        <label class="sr-only" for="chatInput">質問を入力</label>
+        <textarea id="chatInput" rows="1" placeholder="質問を入力してください（例：福利厚生を教えて）"></textarea>
+        <button class="btn chat__send" type="submit" aria-label="送信">➤</button>
+      </form>
+    </div>
+
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    AI採用システム デモ ／ 提案用のプロトタイプです。実在の企業・個人とは関係ありません。
+  </div>
+</footer>
+
+<script src="assets/js/knowledge.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="assets/js/briefing.js"></script>
+</body>
+</html>
