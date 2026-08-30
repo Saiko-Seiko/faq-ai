@@ -235,4 +235,52 @@ function mountSettings() {
   Mode.probe();
 }
 
-document.addEventListener('DOMContentLoaded', mountSettings);
+/* ------------------------------------------------------------
+   案内の表示
+   ------------------------------------------------------------
+   クライアントがURLだけ渡されて一人で触る前提の作り。
+   説明する人がいないので、次に何をすればよいかを画面上に置く。
+   一度閉じたら、その端末では出さない。
+   ------------------------------------------------------------ */
+const Guide = {
+  /* 各ページの案内バー（[data-hint="キー"] を持つ要素） */
+  mountHints() {
+    document.querySelectorAll('[data-hint]').forEach((bar) => {
+      const key = `faqai.hint.${bar.dataset.hint}`;
+      if (Store.get(key, false)) { bar.hidden = true; return; }
+      bar.hidden = false;
+
+      const close = bar.querySelector('.hint-bar__close');
+      if (close) {
+        close.addEventListener('click', () => {
+          bar.hidden = true;
+          Store.set(key, true);
+        });
+      }
+    });
+  },
+
+  /* 初回訪問時の案内（トップページのみ） */
+  mountWelcome() {
+    const modal = document.getElementById('welcomeModal');
+    if (!modal) return;
+
+    const open = () => { modal.hidden = false; };
+    const close = () => { modal.hidden = true; Store.set('faqai.welcomed', true); };
+
+    modal.querySelectorAll('[data-welcome-close]').forEach((b) => b.addEventListener('click', close));
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+
+    // ヘッダーの「使い方」からいつでも開き直せる
+    const reopen = document.getElementById('guideBtn');
+    if (reopen) reopen.addEventListener('click', open);
+
+    if (!Store.get('faqai.welcomed', false)) open();
+  },
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  mountSettings();
+  Guide.mountHints();
+  Guide.mountWelcome();
+});

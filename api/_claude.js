@@ -73,8 +73,43 @@ function readBody(req) {
   return req.body || {};
 }
 
+/* ------------------------------------------------------------
+   簡易レート制限
+   ------------------------------------------------------------
+   デモは公開URLで配るため、URLを知っていれば誰でもライブモードを使えてしまう。
+   青天井の課金を避けるための歯止め。
+
+   ⚠ 実行環境ごとのメモリ上のカウンタなので、厳密ではない
+   （サーバーレスは複数インスタンスで動き、時間が経つと破棄される）。
+   本番で正確に制限するなら、外部のストアで数える必要がある。
+   デモとしては「明らかな連打を止める」用途で十分と判断している。
+   ------------------------------------------------------------ */
+const RATE_LIMIT = Number(process.env.RATE_LIMIT_PER_WINDOW || 40);
+const RATE_WINDOW_MS = 10 * 60 * 1000; // 10分
+const buckets = new Map();
+
+function clientKey(req) {
+  const fwd = req.headers['x-forwarded-for'];
+  return (typeof fwd === 'string' ? fwd.split(',')[0].trim() : '') || 'unknown';
+}
+
+function overLimit(req) {
+  const now = Date.now();
+  const key = clientKey(req);
+  const slot = buckets.get(key);
+
+  if (!slot || now > slot.resetAt) {
+    buckets.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    if (buckets.size > 5000) buckets.clear(); // 際限なく増やさない
+    return false;
+  }
+
+  slot.count += 1;
+  return slot.count > RATE_LIMIT;
+}
+
 /**
- * POST 以外・未設定・本文不正をここで弾く。
+ * POST 以外・未設定・本文不正・回数超過をここで弾く。
  * 問題なければ本文を返し、応答済みなら null を返す。
  */
 function guard(req, res) {
@@ -87,6 +122,13 @@ function guard(req, res) {
       error: 'サーバーにAPIキーが設定されていません。',
       hint: 'Vercel の環境変数 ANTHROPIC_API_KEY を設定してください。',
       configured: false,
+    });
+    return null;
+  }
+  if (overLimit(req)) {
+    res.status(429).json({
+      error: 'ご利用が集中しています。しばらく時間をおいてからお試しください。'
+        + '（デモのため、一定時間あたりの回数に上限を設けています）',
     });
     return null;
   }

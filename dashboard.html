@@ -163,7 +163,19 @@
     <button class="btn btn--ghost btn--sm" id="resetBtn" type="button">見本データに戻す</button>
   </div>
 
-  <div class="note note--accent" style="margin-bottom:16px">
+  <div class="hint-bar" data-hint="dashboard" hidden>
+    <span class="hint-bar__icon">💡</span>
+    <div class="hint-bar__body">
+      <strong>ぜひ見ていただきたい例：鈴木 健さん（9点）</strong>
+      3名の中でAIのスコアが最も低い方です。ですが回答ログをお読みいただくと、
+      倉庫勤務の傍らExcelマクロを独学し、全社の集計作業を月6日分削減した経験が出てきます。
+      点数が低いのは1問の回答が短かったためで、人物の評価ではありません。
+      <strong>このような方を拾えるように、合否のボタンは人事の方の画面にだけ置いています。</strong>
+    </div>
+    <button class="hint-bar__close" type="button">閉じる</button>
+  </div>
+
+  <div class="note note--accent" style="margin:16px 0">
     <strong>スコアはAIによる一次スクリーニングの参考値であり、合否の決定ではありません。</strong>
     AIが行うのは回答内容の整理とスコア化までです。合格・不合格の判断は、
     この画面で人事担当者が回答をお読みになったうえで確定してください。

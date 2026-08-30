@@ -97,6 +97,19 @@
 <main class="wrap">
   <div class="stage">
 
+    <div class="hint-bar" data-hint="interview" hidden>
+      <span class="hint-bar__icon">💡</span>
+      <div class="hint-bar__body">
+        <strong>お試しの流れ</strong>
+        求職者の方に届く画面です。全部で6問ありますが、
+        <strong>「回答例を入れる」ボタン</strong>を押すと例文が入るので、
+        1分ほどで最後までご覧いただけます。
+        最後の1問は、直前のご回答をふまえてAIがその場で作る質問です。
+      </div>
+      <button class="hint-bar__close" type="button">閉じる</button>
+    </div>
+
+
     <!-- ============ 無効なURL ============ -->
     <section class="card panel stack" id="screen-invalid" hidden>
       <span class="badge badge--danger">URLが正しくありません</span>
@@ -165,6 +178,8 @@
 
       <div class="answer-tools">
         <button class="btn btn--ghost btn--sm" id="voiceBtn" type="button">🎤 音声で入力</button>
+        <!-- デモ限定の補助。実際の面接画面には出しません -->
+        <button class="btn btn--ghost btn--sm" id="sampleBtn" type="button" hidden>回答例を入れる</button>
         <span class="count" id="answerCount">0 文字</span>
       </div>
 

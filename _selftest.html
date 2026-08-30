@@ -113,6 +113,7 @@ async function syntaxCheck(paths) {
     const w = win(f); const d = w.document;
 
     check('briefing: 初期表示', n(d, '.chapter') === 6 && n(d, '.chip') === 4);
+    check('briefing: 案内バーが出る', !d.querySelector('[data-hint="briefing"]').hidden);
 
     // 動画を再生 → 時計が進むか
     d.getElementById('playBtn').click();
@@ -165,11 +166,22 @@ async function syntaxCheck(paths) {
     const f = await loadFrame('interview.html?token=demo-tanaka');
     const w = win(f); const d = w.document;
 
+    check('interview: 案内バーが出る', !d.querySelector('[data-hint="interview"]').hidden);
+
     d.getElementById('agree').click();
     check('interview: 同意で開始可能に', d.getElementById('startBtn').disabled === false);
     d.getElementById('startBtn').click();
     await wait(300);
     check('interview: 1問目表示', txt(d, '#qStep') === '質問 1 / 6', txt(d, '#qStep'));
+
+    // クライアントが一人で試すための補助ボタン
+    const sampleBtn = d.getElementById('sampleBtn');
+    check('interview: 回答例ボタンが出る', !sampleBtn.hidden);
+    sampleBtn.click();
+    await wait(150);
+    check('interview: 回答例が入力される',
+      d.getElementById('answerInput').value.length > 40,
+      `len=${d.getElementById('answerInput').value.length}`);
 
     const reply = 'テスト回答です。前職では在庫管理システムの改修を担当し、'
                 + '検索の応答時間を20秒から2.5秒へ短縮しました。チームで相談しながら進めました。';
@@ -238,6 +250,9 @@ async function syntaxCheck(paths) {
     }
 
     check('dashboard: メーター4本', n(d, '.meter') === 4);
+    check('dashboard: 鈴木さんへの案内が出る',
+      !d.querySelector('[data-hint="dashboard"]').hidden &&
+      d.querySelector('[data-hint="dashboard"]').textContent.includes('鈴木'));
     check('dashboard: 参考値である旨の明記',
       d.body.textContent.includes('合否の決定ではありません'));
   }

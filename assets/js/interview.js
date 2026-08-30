@@ -188,7 +188,21 @@ const Interview = (() => {
     $('answerCount').textContent = '0 文字';
     $('nextBtn').textContent = index === total - 1 ? '回答を送信して終了する' : '次の質問へ';
 
+    // 回答例が用意されている設問だけ、補助ボタンを出す
+    $('sampleBtn').hidden = !SAMPLE_ANSWERS[q.id];
+
     questionStartedAt = Date.now();
+  }
+
+  /* デモ限定の補助。ボタン1つで例文を入れ、最後まで流れを見てもらう */
+  function fillSample() {
+    const q = queue[index];
+    const sample = SAMPLE_ANSWERS[q.id];
+    if (!sample) return;
+    const box = $('answerInput');
+    box.value = sample;
+    box.dispatchEvent(new Event('input'));
+    box.focus();
   }
 
   async function submitAnswer() {
@@ -334,6 +348,7 @@ const Interview = (() => {
     });
 
     $('nextBtn').addEventListener('click', submitAnswer);
+    $('sampleBtn').addEventListener('click', fillSample);
 
     setupVoice();
     show('intro');
