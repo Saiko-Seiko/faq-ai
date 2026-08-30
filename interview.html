@@ -3,9 +3,77 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI面接（準備中）｜AI採用システム デモ</title>
+<title>オンライン面接｜AI採用システム デモ</title>
+<meta name="description" content="ブラウザだけで完結するAIオンライン面接。">
 <meta name="robots" content="noindex, nofollow">
 <link rel="stylesheet" href="assets/css/base.css">
+<style>
+  .stage { max-width: 720px; margin-inline: auto; padding: 34px 0 60px; }
+  [hidden] { display: none !important; }
+
+  .panel { padding: 26px; }
+  @media (max-width: 560px) { .panel { padding: 20px; } }
+
+  .panel h1 { font-size: clamp(19px, 3.4vw, 24px); }
+
+  /* 候補者情報 */
+  .who {
+    display: flex; align-items: center; gap: 13px;
+    padding: 14px 16px; border-radius: var(--radius); background: var(--surface-2);
+  }
+  .who__av {
+    width: 42px; height: 42px; border-radius: 50%; flex: none;
+    background: var(--accent); color: var(--accent-fg);
+    display: grid; place-items: center; font-weight: 800; font-size: 15px;
+  }
+  .who__name { font-weight: 700; font-size: 15px; }
+  .who__role { font-size: 12.5px; color: var(--text-muted); }
+
+  /* 事前説明のリスト */
+  .facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: var(--border-soft); border-radius: var(--radius); overflow: hidden; }
+  .facts li { display: flex; gap: 12px; padding: 11px 14px; background: var(--surface); font-size: 13.5px; }
+  .facts dt, .facts b { flex: none; width: 7.5em; color: var(--text-muted); font-weight: 700; }
+
+  .agree-row { display: flex; gap: 10px; align-items: flex-start; font-size: 13.5px; cursor: pointer; }
+  .agree-row input { margin-top: 5px; flex: none; }
+
+  /* 進捗 */
+  .prog { height: 4px; background: var(--surface-2); border-radius: 3px; overflow: hidden; margin-bottom: 18px; }
+  .prog i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s ease; }
+
+  .q-step { font-size: 12px; font-weight: 700; letter-spacing: .06em; color: var(--accent); }
+  .q-text { font-size: clamp(16px, 2.8vw, 19px); font-weight: 700; line-height: 1.8; margin: 10px 0 0; }
+  .q-hint { font-size: 13px; color: var(--text-muted); margin: 10px 0 0; }
+
+  .answer-tools { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .answer-tools .count { margin-left: auto; font-size: 12px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+  #voiceBtn.is-recording { background: var(--danger); color: #fff; border-color: transparent; }
+
+  /* 解析中 */
+  .spin {
+    width: 34px; height: 34px; border-radius: 50%; margin: 0 auto;
+    border: 3px solid var(--surface-2); border-top-color: var(--accent);
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 完了 */
+  .done-mark {
+    width: 56px; height: 56px; border-radius: 50%; margin: 0 auto;
+    background: var(--ok-soft); color: var(--ok);
+    display: grid; place-items: center; font-size: 26px;
+  }
+  .summary { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .summary div {
+    flex: 1; min-width: 130px; text-align: center;
+    padding: 13px; border-radius: var(--radius); background: var(--surface-2);
+  }
+  .summary b { display: block; font-size: 19px; }
+  .summary span { font-size: 12px; color: var(--text-muted); }
+
+  #tokenList { margin: 0; padding-left: 1.3em; font-size: 14px; }
+  #tokenList li { margin: 6px 0; }
+</style>
 </head>
 <body>
 
@@ -22,29 +90,133 @@
   </div>
 </header>
 
-<p class="demo-banner">これは提案用のデモです。</p>
+<p class="demo-banner">
+  これは提案用のデモです。候補者情報は架空で、回答はこのブラウザ内にのみ保存されます。
+</p>
 
-<main class="wrap" style="padding:56px 0">
-  <div class="card card__pad stack" style="max-width:600px;margin-inline:auto">
-    <span class="badge badge--warn">Phase 2 で実装予定</span>
-    <h1 style="font-size:22px">AI面接官</h1>
-    <p class="muted" style="margin:0">
-      候補者へお送りする個別URL（<code>interview.html?token=…</code>）から、
-      ブラウザだけで面接が完結する画面です。AIが5問前後を質問し、
-      回答を4つの観点で分析してスコア化します。
-    </p>
-    <div class="note note--accent">
-      設計上の要点：面接の終了画面では<strong>その場で合否を表示しません</strong>。
-      AIはスコアと所見の作成までを担当し、合否は人事担当者が決定します。
-    </div>
-    <a class="btn btn--ghost" href="index.html">トップへ戻る</a>
+<main class="wrap">
+  <div class="stage">
+
+    <!-- ============ 無効なURL ============ -->
+    <section class="card panel stack" id="screen-invalid" hidden>
+      <span class="badge badge--danger">URLが正しくありません</span>
+      <h1>面接用URLをご確認ください</h1>
+      <p class="muted" style="margin:0">
+        このURLは有効ではないか、有効期限が切れています。
+        お手元の案内メールに記載されたURLをもう一度ご確認ください。
+      </p>
+      <div class="note">
+        <strong>デモ用の候補者URL</strong>
+        <ul id="tokenList" style="margin-top:8px"></ul>
+      </div>
+    </section>
+
+    <!-- ============ 開始前 ============ -->
+    <section class="card panel stack" id="screen-intro" hidden>
+      <span class="badge badge--accent">オンライン面接のご案内</span>
+      <h1>AI面接官による一次面接</h1>
+
+      <div class="who">
+        <div class="who__av">候補</div>
+        <div>
+          <div class="who__name" id="introName">—</div>
+          <div class="who__role" id="introRole">—</div>
+        </div>
+      </div>
+
+      <ul class="facts">
+        <li><b>質問数</b><span id="introCount">—</span></li>
+        <li><b>所要時間</b><span>およそ15〜20分</span></li>
+        <li><b>回答方法</b><span>テキスト入力（対応ブラウザでは音声入力も使えます）</span></li>
+        <li><b>カメラ・録画</b><span>使用しません</span></li>
+        <li><b>中断</b><span>できません。お時間に余裕のあるときにお進みください</span></li>
+      </ul>
+
+      <div class="note note--accent">
+        <strong>合否はAIが決めるものではありません。</strong><br>
+        AIは回答内容を整理し、参考となるスコアと所見を作成するところまでを担当します。
+        選考の合否は、人事担当者がご回答を読んだうえで判断いたします。
+        結果は後日、あらためてご連絡いたします。
+      </div>
+
+      <label class="agree-row">
+        <input type="checkbox" id="agree">
+        <span>
+          回答内容が選考の資料として保存されること、
+          およびAIによる一次評価が行われることに同意します。
+        </span>
+      </label>
+
+      <button class="btn btn--block" id="startBtn" type="button" disabled>面接を開始する</button>
+      <p class="hint center" style="margin:0">開始すると最初の質問が表示されます。</p>
+    </section>
+
+    <!-- ============ 質問中 ============ -->
+    <section class="card panel" id="screen-question" hidden>
+      <div class="prog"><i id="qProgress"></i></div>
+
+      <div class="q-step" id="qStep">質問 1 / 6</div>
+      <p class="q-text" id="qText">—</p>
+      <p class="q-hint" id="qHint" hidden></p>
+
+      <label class="sr-only" for="answerInput">回答</label>
+      <textarea class="textarea" id="answerInput" style="margin-top:16px;min-height:150px"
+                placeholder="こちらにご回答を入力してください"></textarea>
+
+      <div class="answer-tools">
+        <button class="btn btn--ghost btn--sm" id="voiceBtn" type="button">🎤 音声で入力</button>
+        <span class="count" id="answerCount">0 文字</span>
+      </div>
+
+      <button class="btn btn--block" id="nextBtn" type="button" style="margin-top:16px">次の質問へ</button>
+      <p class="hint center" style="margin:10px 0 0">
+        じっくりお考えいただいて構いません。時間制限はありません。
+      </p>
+    </section>
+
+    <!-- ============ 解析中 ============ -->
+    <section class="card panel stack center" id="screen-analyzing" hidden>
+      <div class="spin"></div>
+      <h1 style="font-size:18px">ご回答を確認しています</h1>
+      <p class="muted" style="margin:0">そのまましばらくお待ちください。</p>
+    </section>
+
+    <!-- ============ 完了 ============ -->
+    <!-- 設計上の要点：この画面では合否を一切表示しない。
+         AIが即座に不合格を伝える体験を避けるため、意図的にこうしている。 -->
+    <section class="card panel stack center" id="screen-done" hidden>
+      <div class="done-mark">✓</div>
+      <h1>面接は以上です。ありがとうございました</h1>
+      <p class="muted" style="margin:0">
+        <span id="doneName">—</span> 様、お時間をいただきありがとうございました。<br>
+        ご回答は無事に受け付けました。
+      </p>
+
+      <div class="summary">
+        <div><b id="doneCount">—</b><span>ご回答いただいた質問</span></div>
+        <div><b id="doneTime">—</b><span>所要時間</span></div>
+      </div>
+
+      <div class="note">
+        このあと、<strong>人事担当者がご回答を確認いたします。</strong>
+        選考結果は追ってご連絡いたしますので、いましばらくお待ちください。
+      </div>
+
+      <a class="btn btn--ghost" href="dashboard.html">（デモ用）人事画面で結果を見る</a>
+    </section>
+
   </div>
 </main>
 
 <footer class="site-footer">
-  <div class="wrap">AI採用システム デモ ／ 提案用のプロトタイプです。</div>
+  <div class="wrap">
+    AI採用システム デモ ／ 提案用のプロトタイプです。実在の企業・個人とは関係ありません。
+  </div>
 </footer>
 
+<script src="assets/js/knowledge.js"></script>
 <script src="assets/js/app.js"></script>
+<script src="assets/js/interview-data.js"></script>
+<script src="assets/js/interview.js"></script>
 </body>
 </html>

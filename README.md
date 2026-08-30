@@ -12,15 +12,25 @@
 
 ## 現在の状況
 
-**Phase 0（土台）と Phase 1（会社説明会ページ）が完成。** Phase 2・3 は導線のみの準備中ページ。
+**Phase 0（土台）・Phase 1（会社説明会）・Phase 2（AI面接官）が完成。** Phase 3 は準備中ページ。
 進捗は [docs/03-roadmap.md](docs/03-roadmap.md) のチェックボックスが唯一の正。
 
 | 画面 | ファイル | 状態 |
 |---|---|---|
 | トップ | `index.html` | 完成 |
 | ① 会社説明会（動画＋チャット） | `briefing.html` | 完成 |
-| ② AI面接官 | `interview.html` | 準備中（Phase 2） |
+| ② AI面接官 | `interview.html` | 完成 |
 | ③ 人事ダッシュボード | `dashboard.html` | 準備中（Phase 3） |
+
+### デモ用の候補者URL
+
+| 候補者 | URL |
+|---|---|
+| 田中 陽子（Webエンジニア／中途） | `interview.html?token=demo-tanaka` |
+| 鈴木 健（ポテンシャル採用） | `interview.html?token=demo-suzuki` |
+| 加藤 美咲（カスタマーサポート） | `interview.html?token=demo-kato` |
+
+存在しないトークンでアクセスすると「URLが正しくありません」の画面になる。
 
 ### 動かし方
 
