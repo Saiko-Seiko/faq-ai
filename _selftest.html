@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>SELFTEST RUNNING</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  body { font: 14px/1.7 system-ui, sans-serif; padding: 20px; background: #111; color: #eee; }
+  .ok { color: #6ee7a8; } .ng { color: #ff8080; }
+  li { margin: 3px 0; }
+</style>
+</head>
+<body>
+<h1>自己診断（操作あり）</h1>
+<ul id="out"></ul>
+
+<script>
+/* 開発用の動作確認ページ。リポジトリには含めない（.gitignore 済み）。
+   各画面を iframe で読み込み、実際に操作して結果を確かめる。
+   結果は document.title に書き出し、DevTools の HTTP エンドポイントから読む。 */
+
+const results = [];
+const errors = [];
+const check = (name, cond, detail) => results.push({ name, ok: !!cond, detail: detail || '' });
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function loadFrame(src) {
+  return new Promise((resolve) => {
+    const f = document.createElement('iframe');
+    f.style.cssText = 'width:1100px;height:820px;position:fixed;left:-3000px';
+    f.src = src;
+    f.addEventListener('load', () => setTimeout(() => resolve(f), 700));
+    document.body.appendChild(f);
+  });
+}
+function win(f) {
+  const w = f.contentWindow;
+  w.addEventListener('error', (e) => errors.push(`${f.src.split('/').pop()}: ${e.message}`));
+  return w;
+}
+const n = (d, s) => d.querySelectorAll(s).length;
+const txt = (d, s) => { const e = d.querySelector(s); return e ? e.textContent.trim() : '(なし)'; };
+
+/* チャットは実際のUI経由で送る。
+   briefing.js の Chat は const 宣言なので window のプロパティにはならない。 */
+function ask(w, d, question) {
+  const box = d.getElementById('chatInput');
+  box.value = question;
+  box.dispatchEvent(new w.Event('input'));
+  d.getElementById('chatForm').requestSubmit();
+}
+
+function finishReport() {
+  const bad = results.filter((r) => !r.ok);
+  document.getElementById('out').innerHTML = results
+    .map((r) => `<li class="${r.ok ? 'ok' : 'ng'}">${r.ok ? 'OK ' : 'NG '} ${r.name} ${r.detail ? `<small>[${r.detail}]</small>` : ''}</li>`)
+    .join('') + errors.map((e) => `<li class="ng">ERR ${e}</li>`).join('');
+
+  const label = (bad.length === 0 && errors.length === 0)
+    ? `SELFTEST PASS ${results.length}/${results.length}`
+    : `SELFTEST FAIL(${bad.length}) ` + bad.map((b) => b.name + (b.detail ? '=' + b.detail : '')).join(' | ')
+      + (errors.length ? ' ERRORS: ' + errors.join(' | ') : '');
+  document.title = label.slice(0, 420);
+}
+
+// 途中で落ちても必ず結果を出す（無言で止まると原因が分からないため）
+window.addEventListener('unhandledrejection', (e) => {
+  errors.push(`unhandled: ${e.reason && e.reason.message ? e.reason.message : e.reason}`);
+  finishReport();
+});
+setTimeout(() => { if (document.title === 'SELFTEST RUNNING') { errors.push('timeout'); finishReport(); } }, 120000);
+
+(async function run() {
+  window.addEventListener('error', (e) => errors.push(`harness: ${e.message}`));
+
+  /* ============ ① 会社説明会：実際に質問する ============ */
+  {
+    const f = await loadFrame('briefing.html');
+    const w = win(f); const d = w.document;
+
+    check('briefing: 初期表示', n(d, '.chapter') === 6 && n(d, '.chip') === 4);
+
+    // 動画を再生 → 時計が進むか
+    d.getElementById('playBtn').click();
+    await wait(2400);
+    const clock = txt(d, '#tNow');
+    check('briefing: 再生で時間が進む', clock !== '0:00', `t=${clock}`);
+    d.getElementById('playBtn').click();
+
+    // チャプター送り
+    d.querySelectorAll('.chapter')[3].click();
+    await wait(200);
+    check('briefing: チャプター移動', txt(d, '#tNow') === '5:00', txt(d, '#tNow'));
+
+    const lastAnswer = () => {
+      const all = d.querySelectorAll('.msg--ai .msg__bubble');
+      return all[all.length - 1].textContent;
+    };
+
+    // 答えられるべき質問 → 期待する語
+    const shouldAnswer = [
+      ['福利厚生を教えてください', '住宅手当'],
+      ['給与はどのくらいですか', '26.5'],
+      ['リモートワークはできますか', '在宅'],
+      ['選考の流れを教えてください', '書類選考'],
+      ['休みはどれくらいありますか', '年間休日'],
+      ['産休・育休の実績はありますか', '育休'],
+    ];
+    for (const [q, expect] of shouldAnswer) {
+      ask(w, d, q);
+      await wait(1500);
+      const got = lastAnswer();
+      check(`briefing: 「${q}」に正しく答える`, got.includes(expect), got.slice(0, 26));
+    }
+    check('briefing: 出典バッジが出る', n(d, '.msg__src .badge') >= 1);
+
+    // 答えてはいけない質問 → 人事へ引き継ぐ
+    // 「〜はありますか」のような共通の言い回しで誤ヒットしないことの確認も兼ねる
+    const shouldDefer = ['駐車場はありますか', 'ペット同伴はできますか', '制服はありますか', '食堂はありますか'];
+    for (const q of shouldDefer) {
+      ask(w, d, q);
+      await wait(1500);
+      const got = lastAnswer();
+      check(`briefing: 「${q}」は人事へ引き継ぐ`,
+        got.includes('採用担当') && got.includes('確認できません'), got.slice(0, 26));
+    }
+  }
+
+  /* ============ ② AI面接：最後まで通す ============ */
+  {
+    const f = await loadFrame('interview.html?token=demo-tanaka');
+    const w = win(f); const d = w.document;
+
+    d.getElementById('agree').click();
+    check('interview: 同意で開始可能に', d.getElementById('startBtn').disabled === false);
+    d.getElementById('startBtn').click();
+    await wait(300);
+    check('interview: 1問目表示', txt(d, '#qStep') === '質問 1 / 6', txt(d, '#qStep'));
+
+    const reply = 'テスト回答です。前職では在庫管理システムの改修を担当し、'
+                + '検索の応答時間を20秒から2.5秒へ短縮しました。チームで相談しながら進めました。';
+    for (let i = 0; i < 6; i += 1) {
+      const box = d.getElementById('answerInput');
+      box.value = reply + `（${i + 1}問目）`;
+      box.dispatchEvent(new w.Event('input'));
+      d.getElementById('nextBtn').click();
+      await wait(500);
+    }
+    await wait(1200);
+
+    const done = d.getElementById('screen-done');
+    check('interview: 完了画面に到達', done && !done.hidden);
+    check('interview: 6問回答した', txt(d, '#doneCount') === '6問', txt(d, '#doneCount'));
+
+    // 設計上の要点：完了画面に合否を出さない
+    const doneText = done ? done.textContent : '';
+    check('interview: 完了画面に合否を出さない',
+      !doneText.includes('合格') && !doneText.includes('不合格') && doneText.includes('追ってご連絡'),
+      doneText.includes('合格') ? '合否が出ている' : 'OK');
+
+    // 保存されたか
+    const saved = JSON.parse(w.eval('JSON.stringify(Sessions.all())'));
+    const mine = saved.filter((r) => r.token === 'demo-tanaka' && r.id.indexOf('seed') !== 0);
+    check('interview: 記録が保存される', mine.length >= 1, `saved=${saved.length}`);
+    if (mine.length) {
+      const rec = mine[mine.length - 1];
+      check('interview: スコアが4軸ぶん出る', Object.keys(rec.scores).length === 4);
+      check('interview: 合計は20点以下', rec.total >= 4 && rec.total <= 20, `total=${rec.total}`);
+      check('interview: 合否は未設定で人事へ渡る', rec.humanDecision === null);
+      check('interview: 問答ログ6件', rec.answers.length === 6, `n=${rec.answers.length}`);
+    }
+  }
+
+  /* ============ ③ 人事ダッシュボード：人が合否を押す ============ */
+  {
+    const f = await loadFrame('dashboard.html');
+    const w = win(f); const d = w.document;
+
+    check('dashboard: 候補者が並ぶ', n(d, '.row') >= 3, `rows=${n(d, '.row')}`);
+
+    // 台本の山場：スコア9点の鈴木さんを人事が「合格」にできるか
+    const suzuki = d.querySelector('[data-id="seed-suzuki"]');
+    check('dashboard: 鈴木さんの行がある', !!suzuki);
+    if (suzuki) {
+      check('dashboard: 鈴木さんは9点', suzuki.textContent.includes('9'), suzuki.textContent.replace(/\s+/g, ' ').slice(0, 40));
+      suzuki.click();
+      await wait(300);
+      check('dashboard: 詳細に切り替わる', txt(d, '#dName') === '鈴木 健', txt(d, '#dName'));
+      check('dashboard: 未判定と表示', txt(d, '#decisionState').includes('未判定'));
+      check('dashboard: 回答ログが読める',
+        d.getElementById('transcript').textContent.includes('マクロ'));
+
+      d.querySelector('[data-decision="pass"]').click();
+      await wait(300);
+      check('dashboard: 人事が合格にできる', txt(d, '#decisionState').includes('合格'), txt(d, '#decisionState'));
+      check('dashboard: 一覧のバッジも変わる',
+        d.querySelector('[data-id="seed-suzuki"]').textContent.includes('合格'));
+
+      // もう一度押して未判定に戻せる（誤操作の取り消し）
+      d.querySelector('[data-decision="pass"]').click();
+      await wait(200);
+      check('dashboard: 再押下で未判定へ戻せる', txt(d, '#decisionState').includes('未判定'));
+    }
+
+    check('dashboard: メーター4本', n(d, '.meter') === 4);
+    check('dashboard: 参考値である旨の明記',
+      d.body.textContent.includes('合否の決定ではありません'));
+  }
+
+  finishReport();
+})();
+</script>
+</body>
+</html>

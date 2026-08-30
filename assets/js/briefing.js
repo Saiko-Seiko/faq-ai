@@ -143,6 +143,23 @@ function normalizeJa(s) {
     .replace(/[！？。、，．,.\s　"'"'（）()「」『』【】・:：;；~〜ー-]/g, '');
 }
 
+/* 日本語の丁寧な言い回し（「〜はありますか」「〜を教えてください」など）は
+   どの質問にも共通して出てくる。これを残したまま2-gram を比べると、
+   中身が全く違う質問どうしが「文末が同じ」というだけで似てしまう。
+   （例：「駐車場はありますか」と「賞与や昇給はありますか」）
+   照合の前に、意味を持たない定型部分を落としておく。 */
+const BOILERPLATE = [
+  'について教えてください', 'を教えてください', 'について教えて', '教えてください', 'おしえてください',
+  'はどうなっていますか', 'はどうですか', 'でしょうか', 'はありますか', 'がありますか',
+  'ありますか', 'できますか', 'いますか', 'ますか', 'ですか', 'ください', 'について', 'とは',
+];
+
+function stripBoilerplate(s) {
+  let out = s;
+  for (const w of BOILERPLATE) out = out.split(w).join('');
+  return out;
+}
+
 function bigrams(s) {
   const out = [];
   for (let i = 0; i < s.length - 1; i += 1) out.push(s.slice(i, i + 2));
@@ -160,8 +177,11 @@ function scoreEntry(query, entry) {
     if (nk && nq.includes(nk)) score += nk.length * 2;
   }
 
-  const qGrams = new Set(bigrams(nq));
-  const eGrams = bigrams(normalizeJa(entry.q));
+  // 2-gram の比較は、定型の言い回しを落とした「中身」どうしで行う
+  const qCore = stripBoilerplate(nq);
+  const eCore = stripBoilerplate(normalizeJa(entry.q));
+  const qGrams = new Set(bigrams(qCore));
+  const eGrams = bigrams(eCore);
   if (eGrams.length) {
     const hits = eGrams.filter((g) => qGrams.has(g)).length;
     score += (hits / eGrams.length) * 6;
