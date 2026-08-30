@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>候補者管理｜AI採用システム</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="assets/css/base.css">
+<style>
+  .page-head { padding: 24px 0 16px; }
+  .page-head h1 { font-size: clamp(19px, 3.2vw, 24px); }
+  .page-head p { margin: 6px 0 0; font-size: 13.5px; color: var(--text-muted); }
+
+  .layout {
+    display: grid; gap: 18px; align-items: start;
+    grid-template-columns: 340px minmax(0, 1fr);
+    padding-bottom: 56px;
+  }
+  @media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+  .form-grid { display: grid; gap: 12px; }
+  .row2 { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+
+  .list-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 13px 16px; border-bottom: 1px solid var(--border-soft);
+    font-size: 12.5px; font-weight: 700; color: var(--text-faint); letter-spacing: .05em;
+  }
+
+  .cand { padding: 16px; border-bottom: 1px solid var(--border-soft); }
+  .cand:last-child { border-bottom: 0; }
+  .cand__head { display: flex; gap: 12px; align-items: flex-start; }
+  .cand__head > div { flex: 1; min-width: 0; }
+  .cand__name { font-weight: 700; font-size: 15px; }
+  .cand__role { font-size: 12.5px; color: var(--text-muted); }
+  .cand__meta {
+    display: flex; flex-wrap: wrap; gap: 4px 14px;
+    margin-top: 8px; font-size: 12px; color: var(--text-faint);
+  }
+  .cand__note {
+    margin: 8px 0 0; font-size: 12.5px; color: var(--text-muted);
+    padding: 8px 10px; background: var(--surface-2); border-radius: 8px;
+  }
+  .cand__url {
+    margin-top: 10px; padding: 9px 11px; border-radius: 8px;
+    background: var(--surface-2); overflow-x: auto;
+  }
+  .cand__url code { font-size: 11.5px; white-space: nowrap; color: var(--text-muted); }
+  .cand__actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 11px; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header__inner">
+    <a class="brand" href="index.html"><span class="brand__mark">AI</span>AI採用システム</a>
+    <span class="site-header__spacer"></span>
+    <nav class="site-nav">
+      <a href="dashboard.html">選考状況</a>
+      <a href="candidates.html" aria-current="page">候補者管理</a>
+      <a href="briefing.html">会社説明会</a>
+    </nav>
+    <span data-settings-slot></span>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="page-head">
+    <h1>候補者管理</h1>
+    <p>候補者を登録すると、その方専用の面接URLが発行されます。</p>
+  </div>
+
+  <!-- データベース未接続のとき -->
+  <div class="card card__pad stack" id="needsDb" hidden style="max-width:620px">
+    <span class="badge badge--warn">データベース未接続</span>
+    <h2 style="font-size:17px">この画面はデモでは使用できません</h2>
+    <p class="muted" style="margin:0;font-size:13.5px">
+      候補者URLの発行には、記録を保存するデータベースが必要です。
+      環境変数 <code>DATABASE_URL</code> を設定してデプロイすると使えるようになります。
+    </p>
+    <p class="hint" style="margin:0">
+      デモとしてお試しの場合は、あらかじめ用意された
+      <a href="interview.html?token=demo-tanaka">見本の面接URL</a> をご利用ください。
+    </p>
+    <a class="btn btn--ghost" href="index.html">トップへ戻る</a>
+  </div>
+
+  <div class="layout" id="main">
+
+    <!-- ============ 登録 ============ -->
+    <form class="card card__pad" id="createForm">
+      <h2 style="font-size:15px;margin-bottom:14px">候補者を登録する</h2>
+
+      <div class="form-grid">
+        <label class="field">
+          <span class="field__label">氏名 <span style="color:var(--danger)">*</span></span>
+          <input class="input" id="fName" required maxlength="100" placeholder="山田 太郎">
+        </label>
+
+        <label class="field">
+          <span class="field__label">応募職種 <span style="color:var(--danger)">*</span></span>
+          <input class="input" id="fRole" required maxlength="100" placeholder="Webエンジニア（中途採用）">
+        </label>
+
+        <label class="field">
+          <span class="field__label">メールアドレス</span>
+          <input class="input" id="fEmail" type="email" maxlength="200" placeholder="任意">
+          <span class="hint">ご入力いただくと、案内メールをその場で作成できます。</span>
+        </label>
+
+        <div class="row2">
+          <label class="field">
+            <span class="field__label">受付期間</span>
+            <input class="input" id="fDays" type="number" min="1" max="365" value="14">
+            <span class="hint">日後まで</span>
+          </label>
+        </div>
+
+        <label class="field">
+          <span class="field__label">社内メモ</span>
+          <input class="input" id="fNote" maxlength="200" placeholder="任意（応募者には表示されません）">
+        </label>
+
+        <button class="btn btn--block" type="submit" id="createBtn">URLを発行する</button>
+        <p class="note note--accent" id="createdNote" hidden style="margin:0"></p>
+      </div>
+
+      <div class="note" style="margin-top:14px">
+        発行されるURLは推測できない文字列です。<br>
+        <strong>受験が完了すると、そのURLは開けなくなります。</strong>
+      </div>
+    </form>
+
+    <!-- ============ 一覧 ============ -->
+    <div class="card">
+      <div class="list-head">
+        候補者一覧<span class="site-header__spacer"></span><span id="count">—</span>
+      </div>
+      <div id="list"></div>
+    </div>
+
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">AI採用システム ／ 候補者管理は人事担当者専用の画面です。</div>
+</footer>
+
+<script src="assets/js/knowledge.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="assets/js/candidates.js"></script>
+</body>
+</html>

@@ -158,17 +158,68 @@ const Interview = (() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  /* ---------- 入口 ---------- */
-  function resolveCandidate() {
+  /* ---------- 入口 ----------
+     サーバーに候補者管理がある場合はそちらを正とする（期限・使い切りの判定込み）。
+     無い場合はデモとして、コード内の CANDIDATES を使う。 */
+  async function resolveCandidate() {
     token = new URLSearchParams(location.search).get('token') || '';
+    if (!token) return null;
+
+    if (Sessions.remote) {
+      try {
+        const res = await fetch(`${CONFIG.API_BASE}/candidates?token=${encodeURIComponent(token)}`, { cache: 'no-store' });
+        if (!res.ok) return null;
+        const data = await res.json();
+        candidate = data.candidate || null;
+        return candidate;
+      } catch (_) {
+        return null;
+      }
+    }
+
     candidate = CANDIDATES[token] || null;
     return candidate;
   }
 
-  function paintInvalid() {
-    $('tokenList').innerHTML = Object.entries(CANDIDATES)
-      .map(([t, c]) => `<li><a href="interview.html?token=${encodeURIComponent(t)}">${escapeHtml(c.name)}（${escapeHtml(c.role)}）</a></li>`)
-      .join('');
+  /* 期限切れ・受験済み・無効化のときの案内文 */
+  const STATUS_MESSAGE = {
+    done: {
+      title: 'この面接は受付済みです',
+      body: 'ご回答はすでに受け付けております。重ねてのご対応は不要です。'
+          + '結果は追ってご連絡いたしますので、いましばらくお待ちください。',
+    },
+    expired: {
+      title: 'このURLの有効期限が切れています',
+      body: '恐れ入りますが、採用ご担当者へご連絡ください。あらためてURLをお送りいたします。',
+    },
+    revoked: {
+      title: 'このURLは無効になっています',
+      body: '恐れ入りますが、採用ご担当者へご連絡ください。',
+    },
+  };
+
+  function paintInvalid(status) {
+    const msg = STATUS_MESSAGE[status];
+    if (msg) {
+      // 期限切れ・受験済みは「間違い」ではないので、案内の文面を変える
+      $('invalidTitle').textContent = msg.title;
+      $('invalidBody').textContent = msg.body;
+      $('invalidBadge').textContent = status === 'done' ? '受付済み' : '無効なURL';
+      $('invalidBadge').className = status === 'done' ? 'badge badge--ok' : 'badge badge--warn';
+      $('tokenHelp').hidden = true;
+      show('invalid');
+      return;
+    }
+
+    // デモ運用のときだけ、試せるURLを案内する
+    if (!Sessions.remote) {
+      $('tokenList').innerHTML = Object.entries(CANDIDATES)
+        .map(([t, c]) => `<li><a href="interview.html?token=${encodeURIComponent(t)}">${escapeHtml(c.name)}（${escapeHtml(c.role)}）</a></li>`)
+        .join('');
+      $('tokenHelp').hidden = false;
+    } else {
+      $('tokenHelp').hidden = true;
+    }
     show('invalid');
   }
 
@@ -319,20 +370,53 @@ const Interview = (() => {
   }
 
   /* ---------- 初期化 ---------- */
-  function init() {
+  async function init() {
     ['invalid', 'intro', 'question', 'analyzing', 'done'].forEach((k) => {
       screens[k] = document.getElementById(`screen-${k}`);
     });
 
-    if (!resolveCandidate()) { paintInvalid(); return; }
+    await Mode.ready(); // 候補者の管理がサーバー側かどうかを先に確かめる
+
+    const found = await resolveCandidate();
+    if (!found) { paintInvalid(); return; }
+
+    // 期限切れ・受験済み・無効化はここで止める
+    if (candidate.status && candidate.canStart === false) {
+      paintInvalid(candidate.status);
+      return;
+    }
 
     $('introName').textContent = candidate.name;
     $('introRole').textContent = candidate.role;
     $('introCount').textContent = `${QUESTIONS.length + 1}問`;
 
+    // 有効期限があれば伝える（いつまでに受ければよいかが分からないと困る）
+    if (candidate.expiresAt) {
+      $('introExpiry').textContent = `${formatDateTime(candidate.expiresAt)} まで`;
+      $('introExpiryRow').hidden = false;
+    }
+
     $('agree').addEventListener('change', (e) => { $('startBtn').disabled = !e.target.checked; });
 
-    $('startBtn').addEventListener('click', () => {
+    $('startBtn').addEventListener('click', async () => {
+      // サーバー管理なら受験開始を記録する（人事画面で「受験中」が見える）
+      if (Sessions.remote) {
+        try {
+          const res = await fetch(`${CONFIG.API_BASE}/candidates`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ action: 'start', token }),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            paintInvalid((data.candidate && data.candidate.status) || 'revoked');
+            return;
+          }
+        } catch (_) {
+          // 通信できなくても面接は続行する。応募者の機会を奪わない。
+        }
+      }
+
       startedAt = new Date();
       // 共通質問＋深掘り1問ぶんの枠。深掘りの文面は5問目の回答後に埋める。
       queue = QUESTIONS.concat([{ id: 'follow', axis: 'communication', text: '', hint: '' }]);

@@ -237,6 +237,9 @@ const Dashboard = (() => {
       el.innerHTML = '<span class="badge badge--ok">サーバー保存</span> '
         + '記録はデータベースに保存され、他の担当者の画面にも反映されます。';
       $('resetBtn').hidden = true;
+      // 候補者管理はデータベースがある場合のみ意味を持つ
+      const link = $('candLink');
+      if (link) link.hidden = false;
     } else {
       el.innerHTML = '<span class="badge">この端末のみ</span> '
         + 'デモ表示です。記録はご覧の端末内にのみ保存され、他の方には共有されません。';

@@ -66,7 +66,7 @@ Project Settings → Environment Variables
 - [ ] ライブモードで質問 → 回答が返る
 - [ ] `/interview?token=demo-tanaka` — 面接が最後まで進む
 - [ ] `/dashboard` — 候補者が並び、合否ボタンが押せる
-- [ ] `/_selftest.html` — 55項目すべて OK になる
+- [ ] `/_selftest.html` — 57項目すべて OK になる
 
 `cleanUrls` を有効にしているので、URLは `.html` なしで届く
 （`/briefing`、`/interview?token=...`）。`.html` 付きでも自動で転送される。
@@ -251,3 +251,22 @@ ANTHROPIC_API_KEY=sk-ant-...
 - 保存期間と自動削除の仕組み → Stage 4
 
 **本物の応募者データを入れる前に、Stage 2〜4 を終えること。**
+
+### Stage 2 のマイグレーション
+
+候補者URLの発行を使う場合は、001 に続けて適用する。
+
+```bash
+psql "$DATABASE_URL" -f db/002_candidates.sql
+```
+
+適用後、`/candidates`（候補者管理）が使えるようになる。
+人事画面のナビゲーションにも「候補者管理」が現れる。
+
+確認：
+
+- [ ] `/candidates` で候補者を登録するとURLが発行される
+- [ ] そのURLを開くと、その候補者の名前で面接が始まる
+- [ ] 最後まで受験する → もう一度同じURLを開くと「受付済みです」と出る
+- [ ] 「無効にする」を押した候補者のURLは開けない
+- [ ] 期限を過ぎたURLは開けない（期限を1日にして翌日確認、または直接DBを書き換えて確認）

@@ -112,13 +112,13 @@
 
     <!-- ============ 無効なURL ============ -->
     <section class="card panel stack" id="screen-invalid" hidden>
-      <span class="badge badge--danger">URLが正しくありません</span>
-      <h1>面接用URLをご確認ください</h1>
-      <p class="muted" style="margin:0">
+      <span class="badge badge--danger" id="invalidBadge">URLが正しくありません</span>
+      <h1 id="invalidTitle">面接用URLをご確認ください</h1>
+      <p class="muted" style="margin:0" id="invalidBody">
         このURLは有効ではないか、有効期限が切れています。
         お手元の案内メールに記載されたURLをもう一度ご確認ください。
       </p>
-      <div class="note">
+      <div class="note" id="tokenHelp" hidden>
         <strong>デモ用の候補者URL</strong>
         <ul id="tokenList" style="margin-top:8px"></ul>
       </div>
@@ -139,6 +139,7 @@
 
       <ul class="facts">
         <li><b>質問数</b><span id="introCount">—</span></li>
+        <li id="introExpiryRow" hidden><b>受付期限</b><span id="introExpiry">—</span></li>
         <li><b>所要時間</b><span>およそ15〜20分</span></li>
         <li><b>回答方法</b><span>テキスト入力（対応ブラウザでは音声入力も使えます）</span></li>
         <li><b>カメラ・録画</b><span>使用しません</span></li>

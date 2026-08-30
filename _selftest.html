@@ -92,10 +92,10 @@ async function syntaxCheck(paths) {
   /* ============ 0. 全JSの構文確認（サーバー側を含む） ============ */
   await syntaxCheck([
     'api/_claude.js', 'api/chat.js', 'api/interview.js', 'api/health.js',
-    'api/_store.js', 'api/sessions.js',
+    'api/_store.js', 'api/sessions.js', 'api/candidates.js',
     'assets/js/app.js', 'assets/js/knowledge.js', 'assets/js/interview-data.js',
     'assets/js/briefing.js', 'assets/js/interview.js',
-    'assets/js/dashboard.js', 'assets/js/dashboard-seed.js',
+    'assets/js/dashboard.js', 'assets/js/dashboard-seed.js', 'assets/js/candidates.js',
   ]);
 
   // JSON も壊れていないか

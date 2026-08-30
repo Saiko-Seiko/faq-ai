@@ -101,6 +101,11 @@ async function saveSession(rec) {
   // 合否（human_decision / human_memo）はここでは触らない。
   // 応募者側からの送信で、人事の判断が上書きされることがあってはならない。
 
+  // 受験完了。このURLは以降開けなくなる（Stage 2: 使い切り）
+  if (rec.token) {
+    try { await markUsed(rec.token); } catch (_) { /* 記録は保存済み。ここで失敗しても中断しない */ }
+  }
+
   await audit('session.save', rec.id, { total: rec.total, mode: rec.mode }, 'candidate');
   return rec.id;
 }
@@ -145,4 +150,130 @@ async function decideSession(id, { decision, memo, actor = 'hr' }) {
   return toRecord(rows[0]);
 }
 
-module.exports = { isEnabled, saveSession, listSessions, decideSession, audit };
+/* ============================================================
+   Stage 2: 候補者と受験用URL
+   ============================================================ */
+
+const crypto = require('crypto');
+
+/* 推測できない長さのランダム文字列。URLにそのまま載せられる形にする。 */
+function newToken() {
+  return crypto.randomBytes(24).toString('base64url');
+}
+
+/* 受験状況の判定。画面と応募者側の両方がこの1箇所を見る。 */
+function statusOf(row) {
+  const now = Date.now();
+  if (row.revoked_at) return 'revoked';
+  if (row.used_at) return 'done';
+  if (row.expires_at && new Date(row.expires_at).getTime() < now) return 'expired';
+  if (row.started_at) return 'in_progress';
+  return 'pending';
+}
+
+function toCandidate(row) {
+  return {
+    token: row.token,
+    name: row.name,
+    role: row.role,
+    email: row.email || '',
+    note: row.note || '',
+    appliedOn: row.applied_on,
+    expiresAt: row.expires_at,
+    startedAt: row.started_at,
+    usedAt: row.used_at,
+    invitedAt: row.invited_at,
+    revokedAt: row.revoked_at,
+    createdAt: row.created_at,
+    status: statusOf(row),
+  };
+}
+
+async function listCandidates(limit = 300) {
+  const q = db();
+  if (!q) return [];
+  const rows = await q`SELECT * FROM candidates ORDER BY created_at DESC LIMIT ${limit}`;
+  return rows.map(toCandidate);
+}
+
+async function createCandidate({ name, role, email, note, expiresInDays = 14, actor = 'hr' }) {
+  const q = db();
+  if (!q) return null;
+
+  const token = newToken();
+  const expiresAt = new Date(Date.now() + Math.max(1, expiresInDays) * 86400000).toISOString();
+
+  const rows = await q`
+    INSERT INTO candidates (token, name, role, email, note, applied_on, expires_at, created_by)
+    VALUES (${token}, ${name}, ${role}, ${email || null}, ${note || ''}, CURRENT_DATE, ${expiresAt}, ${actor})
+    RETURNING *
+  `;
+  await audit('candidate.create', token, { name, role, expiresAt }, actor);
+  return toCandidate(rows[0]);
+}
+
+/* 応募者側が開いたときに使う。一覧は返さず、その1件だけを返す。 */
+async function getCandidate(token) {
+  const q = db();
+  if (!q) return null;
+  const rows = await q`SELECT * FROM candidates WHERE token = ${token} LIMIT 1`;
+  return rows.length ? toCandidate(rows[0]) : null;
+}
+
+/* 受験開始を記録する（初回のみ）。中断からの再開では上書きしない。 */
+async function markStarted(token) {
+  const q = db();
+  if (!q) return null;
+  const rows = await q`
+    UPDATE candidates SET started_at = COALESCE(started_at, now())
+    WHERE token = ${token} AND revoked_at IS NULL AND used_at IS NULL
+    RETURNING *
+  `;
+  return rows.length ? toCandidate(rows[0]) : null;
+}
+
+/* 受験完了。以降このURLは開けない（使い切り）。 */
+async function markUsed(token) {
+  const q = db();
+  if (!q || !token) return null;
+  const rows = await q`
+    UPDATE candidates SET used_at = COALESCE(used_at, now())
+    WHERE token = ${token}
+    RETURNING *
+  `;
+  return rows.length ? toCandidate(rows[0]) : null;
+}
+
+/* 無効化・期限延長・案内送信済みの記録 */
+async function updateCandidate(token, { revoke, extendDays, invited, actor = 'hr' }) {
+  const q = db();
+  if (!q) return null;
+
+  if (revoke === true) {
+    await q`UPDATE candidates SET revoked_at = now() WHERE token = ${token}`;
+    await audit('candidate.revoke', token, {}, actor);
+  }
+  if (revoke === false) {
+    await q`UPDATE candidates SET revoked_at = NULL WHERE token = ${token}`;
+    await audit('candidate.unrevoke', token, {}, actor);
+  }
+  if (extendDays) {
+    const days = Math.max(1, Math.min(365, Number(extendDays)));
+    const until = new Date(Date.now() + days * 86400000).toISOString();
+    await q`UPDATE candidates SET expires_at = ${until} WHERE token = ${token}`;
+    await audit('candidate.extend', token, { days }, actor);
+  }
+  if (invited) {
+    await q`UPDATE candidates SET invited_at = now() WHERE token = ${token}`;
+    await audit('candidate.invite', token, {}, actor);
+  }
+
+  const rows = await q`SELECT * FROM candidates WHERE token = ${token} LIMIT 1`;
+  return rows.length ? toCandidate(rows[0]) : null;
+}
+
+module.exports = {
+  isEnabled, saveSession, listSessions, decideSession, audit,
+  listCandidates, createCandidate, getCandidate,
+  markStarted, markUsed, updateCandidate, statusOf,
+};
