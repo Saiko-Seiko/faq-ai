@@ -6,6 +6,7 @@
    ============================================================ */
 
 const { isConfigured, MODEL } = require('./_claude.js');
+const store = require('./_store.js');
 
 module.exports = function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -13,5 +14,8 @@ module.exports = function handler(req, res) {
     ok: true,
     configured: isConfigured(), // 環境変数が設定済みか（鍵そのものは返さない）
     model: MODEL,
+    // Stage 1: 記録の保存先。'db' なら人事画面はサーバーから読む
+    storage: store.isEnabled() ? 'db' : 'local',
+    hrAuthRequired: !!process.env.HR_ACCESS_TOKEN,
   });
 };

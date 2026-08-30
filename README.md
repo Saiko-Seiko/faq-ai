@@ -52,7 +52,8 @@
 - [docs/02-proposal.md](docs/02-proposal.md) — 提出済み提案文と、デモが果たすべき証明義務
 - [docs/03-roadmap.md](docs/03-roadmap.md) — 制作ロードマップ（Phase 0〜4）と実機確認チェックリスト
 - [docs/04-demo-script.md](docs/04-demo-script.md) — **商談用デモ台本**（3分の流れ・想定質問への回答）
-- [docs/05-deploy.md](docs/05-deploy.md) — **Vercel へのデプロイ手順**、構成図、**クライアントへのURL共有**と費用の歯止め
+- [docs/05-deploy.md](docs/05-deploy.md) — **Vercel へのデプロイ手順**、構成図、クライアントへのURL共有、**データベース接続**
+- [docs/06-production-plan.md](docs/06-production-plan.md) — **本番化の段階計画**（Stage 1〜6）と Stage 1 の実装メモ
 
 ## 技術構成
 
@@ -123,7 +124,7 @@
 ## 動作確認（_selftest.html）
 
 `_selftest.html` をブラウザで開くと、4画面を iframe で読み込んで実際に操作し、
-53項目を自動で確認する。結果はページ上とタブのタイトルに出る。
+55項目を自動で確認する。結果はページ上とタブのタイトルに出る。
 
 確認していること（抜粋）:
 

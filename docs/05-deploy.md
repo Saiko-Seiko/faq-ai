@@ -66,7 +66,7 @@ Project Settings → Environment Variables
 - [ ] ライブモードで質問 → 回答が返る
 - [ ] `/interview?token=demo-tanaka` — 面接が最後まで進む
 - [ ] `/dashboard` — 候補者が並び、合否ボタンが押せる
-- [ ] `/_selftest.html` — 53項目すべて OK になる
+- [ ] `/_selftest.html` — 55項目すべて OK になる
 
 `cleanUrls` を有効にしているので、URLは `.html` なしで届く
 （`/briefing`、`/interview?token=...`）。`.html` 付きでも自動で転送される。
@@ -192,3 +192,62 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 人事画面の「見本データに戻す」を押せば初期状態に戻る。
 データは端末ごとに独立しているので、他の閲覧者には影響しない。
+
+---
+
+## Stage 1（本番運用）— データベースを繋ぐ
+
+デモのまま使う場合、この節は不要。
+**実際の応募者データを扱い始めるとき**に行う。
+
+### 環境変数
+
+| Name | 必須 | 意味 |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | ライブモードに必要 | Claude の呼び出し |
+| `DATABASE_URL` | 本番に必要 | Postgres の接続文字列。設定すると記録がDBに保存される |
+| `HR_ACCESS_TOKEN` | **`DATABASE_URL` を設定したら必須** | 人事画面の鍵。長いランダム文字列にすること |
+| `RATE_LIMIT_PER_WINDOW` | 任意（既定40） | 10分あたりの上限回数 |
+
+> `DATABASE_URL` を設定して `HR_ACCESS_TOKEN` を忘れると、
+> API は 503 を返して**データを出さない**。
+> 応募者の回答が鍵なしで読める状態を作らないための安全側の作り。
+
+### 手順
+
+1. Postgres を用意する（Vercel Storage の Neon、Supabase、いずれでも可）
+2. スキーマを適用する
+
+   ```bash
+   psql "$DATABASE_URL" -f db/001_init.sql
+   ```
+
+3. `DATABASE_URL` と `HR_ACCESS_TOKEN` を Vercel に設定して Redeploy
+4. `/api/health` が `"storage":"db"` を返すことを確認
+5. `/dashboard` を開くと鍵の入力を求められる。入力すると一覧が出る
+
+### 保存先の切り替わり方
+
+| `DATABASE_URL` | 記録の保存先 | 人事画面 |
+|---|---|---|
+| 未設定 | 閲覧者の端末（localStorage） | 見本データ＋その端末の記録 |
+| 設定済み | データベース | サーバーの記録のみ（見本は出ない） |
+
+人事画面の上部に、どちらで動いているかが常に表示される。
+デモと本番を取り違えないようにするため。
+
+### 動作の確認
+
+- [ ] 面接を1件受ける → `/dashboard` に出る
+- [ ] **別のブラウザ**（またはシークレットウィンドウ）で `/dashboard` を開く
+      → 同じ記録が見える（＝端末をまたいで共有されている）
+- [ ] 合否ボタンを押す → 別のブラウザで再読み込みしても反映されている
+- [ ] 鍵なしで `/api/sessions` を開く → 401 が返り、中身が見えない
+
+### この段階でまだ無いもの
+
+- 候補者URLは `?token=demo-tanaka` のまま（推測可能・期限なし）→ Stage 2
+- 人事の鍵は全員共通。誰が操作したかまでは分からない → Stage 3
+- 保存期間と自動削除の仕組み → Stage 4
+
+**本物の応募者データを入れる前に、Stage 2〜4 を終えること。**

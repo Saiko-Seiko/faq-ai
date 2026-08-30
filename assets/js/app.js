@@ -43,24 +43,93 @@ const Store = {
 /* ------------------------------------------------------------
    面接の回答ログ
    ------------------------------------------------------------
-   ★ デモ限定 ★ localStorage に保存している。
-   本番はサーバーのデータベースに保存し、保存期間と削除方針を
-   個人情報保護方針に沿って定める必要がある。
+   保存先は2通りあり、サーバーの状態で自動的に切り替わる。
+
+     DATABASE_URL あり … サーバーのデータベース（本番）
+                        端末が違っても同じ記録が見える
+     DATABASE_URL なし … 端末の localStorage（デモ）
+                        これまで通りの挙動。クライアントに渡した
+                        デモURLはこちらで動き続ける
 
    AI面接（interview.js）が書き込み、
    人事ダッシュボード（dashboard.js）が読み書きするため、共通側に置く。
    ------------------------------------------------------------ */
 const Sessions = {
+  /* サーバーに保存先があるか（/api/health の storage が 'db' なら true） */
+  remote: false,
+
+  /* --- ローカル（デモ）--- */
   all() {
     const list = Store.get(CONFIG.KEY_SESSIONS, []);
     return Array.isArray(list) ? list : [];
   },
-  save(record) {
+
+  saveLocal(record) {
     const list = Sessions.all();
     const at = list.findIndex((r) => r.id === record.id);
     if (at >= 0) list[at] = record; else list.push(record);
     Store.set(CONFIG.KEY_SESSIONS, list);
     return record;
+  },
+
+  /* --- 保存 ---
+     まずローカルに書く。通信に失敗しても応募者の回答を失わないため。
+     そのうえでサーバーにも送る。 */
+  async save(record) {
+    Sessions.saveLocal(record);
+    if (!Sessions.remote) return record;
+    try {
+      await callApi('sessions', record);
+    } catch (err) {
+      // サーバーへ送れなくても面接は完了させる。記録は端末に残っている。
+      console.warn('サーバーへの保存に失敗しました:', err.message);
+    }
+    return record;
+  },
+
+  /* --- 一覧の取得（人事画面）---
+     サーバーがあればサーバーから、無ければ端末内から読む。 */
+  async fetchAll() {
+    if (!Sessions.remote) return Sessions.all();
+    const res = await fetch(`${CONFIG.API_BASE}/sessions`, {
+      headers: HrKey.headers(),
+      cache: 'no-store',
+    });
+    if (res.status === 401) throw Object.assign(new Error('鍵が正しくありません。'), { code: 401 });
+    if (!res.ok) throw new Error(`取得に失敗しました (${res.status})`);
+    const data = await res.json();
+    return Array.isArray(data.records) ? data.records : [];
+  },
+
+  /* --- 合否の記録（人事画面のみ）--- */
+  async decide(id, decision, memo) {
+    if (!Sessions.remote) return null;
+    const res = await fetch(`${CONFIG.API_BASE}/sessions`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', ...HrKey.headers() },
+      body: JSON.stringify({ id, decision, memo }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `保存に失敗しました (${res.status})`);
+    }
+    return (await res.json()).record;
+  },
+};
+
+/* ------------------------------------------------------------
+   人事用の鍵（Stage 1 の暫定措置）
+   ------------------------------------------------------------
+   応募者の回答は個人情報なので、誰でも読める状態にはできない。
+   Stage 3 で担当者ごとのログインに置き換える。
+   ------------------------------------------------------------ */
+const HrKey = {
+  required: false,
+  get() { return Store.get('faqai.hrkey', '') || ''; },
+  set(v) { if (v) Store.set('faqai.hrkey', v); else Store.remove('faqai.hrkey'); },
+  headers() {
+    const k = HrKey.get();
+    return k ? { 'x-hr-token': k } : {};
   },
 };
 
@@ -82,6 +151,12 @@ const Mode = {
   },
   isLive() { return Mode.get() === 'live'; },
 
+  /** 各画面が起動時に待ち合わせるための共有の約束（問い合わせは1回だけ） */
+  ready() {
+    if (!Mode._probe) Mode._probe = Mode.probe();
+    return Mode._probe;
+  },
+
   /** 起動時に1度だけ、サーバーが使えるかを確かめる。 */
   async probe() {
     try {
@@ -90,6 +165,9 @@ const Mode = {
       const info = await res.json();
       Mode.serverReady = !!info.configured;
       Mode.model = info.model || '';
+      // Stage 1: 保存先がサーバーにあるかどうか
+      Sessions.remote = info.storage === 'db';
+      HrKey.required = !!info.hrAuthRequired;
     } catch (_) {
       // file:// で開いた場合や、未デプロイの場合はここに来る。デモモードで動かす。
       Mode.serverReady = false;
@@ -232,7 +310,7 @@ function mountSettings() {
   paintButton();
 
   // サーバーの状態を確認（失敗してもデモモードで動き続ける）
-  Mode.probe();
+  Mode.ready();
 }
 
 /* ------------------------------------------------------------

@@ -25,9 +25,16 @@ const Dashboard = (() => {
      デモ中に1件でも面接を受けると見本が消え、
      商談で見せたい候補者（鈴木さん）がいなくなってしまった。
      実際に受けた面接は、見本データに追加される形にする。 */
-  function load() {
+  async function load() {
+    if (Sessions.remote) {
+      // 本番：サーバーの記録だけを見る。見本データは混ぜない。
+      records = await Sessions.fetchAll();
+      records.sort((a, b) => b.total - a.total);
+      return;
+    }
+
+    // デモ：端末内の記録に見本を重ねる
     const byId = new Map(SEED_SESSIONS.map((s) => [s.id, s]));
-    // 保存済みを後から重ねる。人事の判断が入っている場合はそちらが優先。
     for (const r of Sessions.all()) byId.set(r.id, r);
 
     records = Array.from(byId.values());
@@ -36,6 +43,7 @@ const Dashboard = (() => {
   }
 
   function persist() {
+    if (Sessions.remote) return; // 本番の保存はサーバー側
     Store.set(CONFIG.KEY_SESSIONS, records);
   }
 
@@ -163,39 +171,111 @@ const Dashboard = (() => {
   }
 
   /* ---------- 操作 ---------- */
-  function decide(value) {
+  async function decide(value) {
     const rec = current();
     if (!rec) return;
+
     // 同じボタンをもう一度押したら未判定に戻す（誤操作を取り消せるように）
-    rec.humanDecision = rec.humanDecision === value ? null : value;
+    const next = rec.humanDecision === value ? null : value;
+    const before = rec.humanDecision;
+
+    rec.humanDecision = next;
     persist();
     paintList();
     paintDecision(rec);
+
+    if (!Sessions.remote) return;
+    try {
+      // サーバーが正とする値で上書きする（誰がいつ判断したかも記録される）
+      const saved = await Sessions.decide(rec.id, next, rec.humanMemo || '');
+      if (saved) Object.assign(rec, saved);
+    } catch (err) {
+      rec.humanDecision = before; // 保存できなかったので画面も戻す
+      paintList();
+      paintDecision(rec);
+      alert(`判断を保存できませんでした。\n${err.message}`);
+    }
   }
 
-  function saveMemo() {
+  async function saveMemo() {
     const rec = current();
     if (!rec) return;
     rec.humanMemo = $('memo').value;
     persist();
+
     const btn = $('memoSave');
+    if (Sessions.remote) {
+      try {
+        await Sessions.decide(rec.id, rec.humanDecision || null, rec.humanMemo);
+      } catch (err) {
+        alert(`メモを保存できませんでした。\n${err.message}`);
+        return;
+      }
+    }
     btn.textContent = '保存しました';
     setTimeout(() => { btn.textContent = 'メモを保存'; }, 1600);
   }
 
-  function resetSeed() {
+  async function resetSeed() {
+    if (Sessions.remote) {
+      alert('本番のデータベースに接続されているため、この操作は行えません。');
+      return;
+    }
     if (!confirm('この端末に保存された面接記録（実際に受けたものを含む）をすべて削除し、見本データだけの状態に戻します。よろしいですか？')) return;
     Store.set(CONFIG.KEY_SESSIONS, SEED_SESSIONS.slice());
     selectedId = null;
-    load();
+    await load();
     paintList();
     paintDetail();
   }
 
+  /* ---------- 表示の切り替え ---------- */
+  function paintSource() {
+    const el = $('sourceNote');
+    if (!el) return;
+    if (Sessions.remote) {
+      el.innerHTML = '<span class="badge badge--ok">サーバー保存</span> '
+        + '記録はデータベースに保存され、他の担当者の画面にも反映されます。';
+      $('resetBtn').hidden = true;
+    } else {
+      el.innerHTML = '<span class="badge">この端末のみ</span> '
+        + 'デモ表示です。記録はご覧の端末内にのみ保存され、他の方には共有されません。';
+    }
+  }
+
+  /* 鍵が必要なのに持っていない／間違っている場合の入力 */
+  async function askHrKey(message) {
+    const entered = prompt(`${message}\n\n人事用の鍵を入力してください。`, HrKey.get() || '');
+    if (entered === null) return false;
+    HrKey.set(entered.trim());
+    return true;
+  }
+
   /* ---------- 初期化 ---------- */
-  function init() {
-    load();
+  async function init() {
+    await Mode.ready(); // 保存先がサーバーかどうかを先に確かめる
+
+    // サーバー保存の場合、鍵が通るまで読み込みを繰り返す
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await load();
+        break;
+      } catch (err) {
+        if (err.code === 401 || !HrKey.get()) {
+          const retry = await askHrKey(
+            attempt === 0
+              ? 'この画面には応募者の個人情報が含まれます。'
+              : '鍵が正しくありませんでした。',
+          );
+          if (retry) continue;
+        }
+        $('list').innerHTML = `<p class="hint" style="padding:14px">読み込めませんでした。<br>${escapeHtml(err.message)}</p>`;
+        break;
+      }
+    }
+
     selectedId = records.length ? records[0].id : null;
+    paintSource();
     paintList();
     paintDetail();
 

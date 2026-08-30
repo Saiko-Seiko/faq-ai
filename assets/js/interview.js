@@ -257,7 +257,7 @@ const Interview = (() => {
     }
 
     const finishedAt = new Date();
-    Sessions.save({
+    await Sessions.save({
       id: `${token}-${startedAt.getTime()}`,
       token,
       candidate: { name: candidate.name, role: candidate.role },
