@@ -369,6 +369,38 @@ const Interview = (() => {
     });
   }
 
+  /* ---------- 個人情報の開示文 ----------
+     実際の設定（保存先・AI利用の有無・保存期間）を読み、
+     書いてあることと起きることを一致させる。 */
+  async function paintConsent() {
+    try {
+      const res = await fetch(`${CONFIG.API_BASE}/privacy`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('unavailable');
+      const info = await res.json();
+
+      if (info.storage === 'db') {
+        const days = info.retentionDays && info.retentionDays.session;
+        if (days) {
+          $('consentRetention').textContent =
+            `ご回答の記録は、受験日から${days}日（約${Math.round(days / 30)}ヶ月）の経過をもって自動的に削除されます。`;
+        }
+      } else {
+        $('consentRetention').textContent =
+          'このページはデモです。ご入力の内容は、ご覧の端末内にのみ保存され、サーバーへは送信されません。';
+      }
+
+      $('consentAi').textContent = info.aiProvider
+        ? `ご回答の内容は、評価の作成のため ${info.aiProvider} へ送信され、分析されます。`
+        : 'このページはデモのため、ご回答が外部のAIサービスへ送信されることはありません。';
+    } catch (_) {
+      // 取得できない場合はデモとみなす（実際、サーバーが無い状態）
+      $('consentRetention').textContent =
+        'このページはデモです。ご入力の内容は、ご覧の端末内にのみ保存されます。';
+      $('consentAi').textContent =
+        'このページはデモのため、ご回答が外部のAIサービスへ送信されることはありません。';
+    }
+  }
+
   /* ---------- 初期化 ---------- */
   async function init() {
     ['invalid', 'intro', 'question', 'analyzing', 'done'].forEach((k) => {
@@ -395,6 +427,10 @@ const Interview = (() => {
       $('introExpiry').textContent = `${formatDateTime(candidate.expiresAt)} まで`;
       $('introExpiryRow').hidden = false;
     }
+
+    // 開示内容は、その環境で実際に起きることに合わせる。
+    // 「AIへ送信します」と書いておきながら送っていない（逆も）を避けるため。
+    paintConsent();
 
     $('agree').addEventListener('change', (e) => { $('startBtn').disabled = !e.target.checked; });
 

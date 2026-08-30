@@ -197,6 +197,40 @@ const Dashboard = (() => {
     }
   }
 
+  /* ---------- 削除（Stage 4） ----------
+     応募者からの削除請求に応じるための操作。
+     論理削除ではなく完全に消す。取り消せないので確認を二重にする。 */
+  async function purge() {
+    const rec = current();
+    if (!rec) return;
+    if (!Sessions.remote) {
+      alert('デモ表示のため、この操作は行えません。');
+      return;
+    }
+
+    const label = `${rec.candidate.name}（${rec.candidate.role}）`;
+    if (!confirm(`${label} の面接記録を完全に削除します。\n\n回答内容・スコア・所見がすべて消え、元に戻せません。\n続けますか？`)) return;
+    if (!confirm('取り消せません。本当に削除しますか？')) return;
+
+    try {
+      const res = await fetch(`${CONFIG.API_BASE}/privacy?id=${encodeURIComponent(rec.id)}`, {
+        method: 'DELETE',
+        headers: HrKey.headers(),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `削除できませんでした (${res.status})`);
+      }
+      selectedId = null;
+      await load();
+      paintList();
+      paintDetail();
+      alert('削除しました。');
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
   async function saveMemo() {
     const rec = current();
     if (!rec) return;
@@ -237,9 +271,10 @@ const Dashboard = (() => {
       el.innerHTML = '<span class="badge badge--ok">サーバー保存</span> '
         + '記録はデータベースに保存され、他の担当者の画面にも反映されます。';
       $('resetBtn').hidden = true;
-      // 候補者管理はデータベースがある場合のみ意味を持つ
+      // 候補者管理と削除はデータベースがある場合のみ意味を持つ
       const link = $('candLink');
       if (link) link.hidden = false;
+      $('purgeBtn').hidden = false;
     } else {
       el.innerHTML = '<span class="badge">この端末のみ</span> '
         + 'デモ表示です。記録はご覧の端末内にのみ保存され、他の方には共有されません。';
@@ -293,6 +328,7 @@ const Dashboard = (() => {
 
     $('memoSave').addEventListener('click', saveMemo);
     $('resetBtn').addEventListener('click', resetSeed);
+    $('purgeBtn').addEventListener('click', purge);
   }
 
   return { init };

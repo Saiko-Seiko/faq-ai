@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>個人情報の取り扱いについて｜AI採用システム</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="assets/css/base.css">
+<style>
+  .stage { max-width: 720px; margin-inline: auto; padding: 34px 0 60px; }
+  .panel { padding: 26px; }
+  @media (max-width: 560px) { .panel { padding: 20px; } }
+  .panel h1 { font-size: clamp(19px, 3.4vw, 24px); }
+  .panel h2 { font-size: 15px; margin-top: 26px; }
+  .panel p, .panel li { font-size: 13.5px; line-height: 1.9; }
+  .panel dl { margin: 10px 0 0; }
+  .panel dt { font-weight: 700; font-size: 12.5px; color: var(--text-muted); margin-top: 14px; }
+  .panel dd { margin: 3px 0 0; font-size: 13.5px; line-height: 1.85; }
+  .form-grid { display: grid; gap: 12px; margin-top: 14px; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header__inner">
+    <a class="brand" href="index.html"><span class="brand__mark">AI</span>AI採用システム</a>
+    <span class="site-header__spacer"></span>
+    <span data-settings-slot></span>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="stage">
+    <div class="card panel">
+
+      <h1>個人情報の取り扱いについて</h1>
+      <p class="muted" style="margin-top:8px">
+        オンライン面接でお預かりする情報の取り扱いをご説明します。
+      </p>
+
+      <h2>お預かりする情報</h2>
+      <dl>
+        <dt>取得する情報</dt>
+        <dd>お名前、応募職種、ご回答の内容、設問ごとの所要時間</dd>
+
+        <dt>利用目的</dt>
+        <dd>本選考の判断材料としてのみ使用します。他の目的には使用しません。</dd>
+
+        <dt>AIによる処理</dt>
+        <dd id="pAi">ご回答の内容は、評価の作成のためにAIサービスへ送信され、分析されます。</dd>
+
+        <dt>保存期間</dt>
+        <dd id="pRetention">選考終了後、一定期間の経過をもって削除します。</dd>
+
+        <dt>第三者への提供</dt>
+        <dd>上記のAIサービスによる処理を除き、第三者へ提供することはありません。</dd>
+
+        <dt>保管方法</dt>
+        <dd>
+          通信は暗号化され、保存先へのアクセスは採用担当者に限定されています。
+        </dd>
+      </dl>
+
+      <h2>合否の決定について</h2>
+      <p>
+        <strong>AIの評価のみで合否が決まることはありません。</strong>
+        AIが行うのはご回答の整理と参考スコアの作成までで、
+        合否の判断は採用担当者がご回答の内容を確認したうえで行います。
+      </p>
+
+      <h2>データの削除をご希望の場合</h2>
+      <p>
+        お預かりした情報の削除は、いつでもご請求いただけます。
+        下のフォームからお申し出ください。ご本人確認のうえ、削除いたします。
+      </p>
+
+      <form class="form-grid" id="delForm">
+        <label class="field">
+          <span class="field__label">お名前</span>
+          <input class="input" id="dName" maxlength="100" placeholder="山田 太郎">
+        </label>
+        <label class="field">
+          <span class="field__label">メールアドレス</span>
+          <input class="input" id="dEmail" type="email" maxlength="200" placeholder="ご応募時のアドレス">
+          <span class="hint">お名前かメールアドレスのいずれかをご入力ください。</span>
+        </label>
+        <label class="field">
+          <span class="field__label">ご連絡事項（任意）</span>
+          <textarea class="textarea" id="dMessage" maxlength="1000" style="min-height:90px"
+                    placeholder="ご希望の内容がありましたらご記入ください。"></textarea>
+        </label>
+        <button class="btn" type="submit" id="delBtn">削除を請求する</button>
+      </form>
+
+      <p class="note note--ok" id="delDone" hidden style="margin-top:14px"></p>
+      <p class="note" id="delLocal" hidden style="margin-top:14px"></p>
+
+      <h2>お問い合わせ</h2>
+      <p id="pContact">
+        本件に関するお問い合わせは、採用ご担当者までご連絡ください。
+      </p>
+
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">AI採用システム</div>
+</footer>
+
+<script src="assets/js/app.js"></script>
+<script>
+/* 実際の設定を読み、書いてある内容と動作を一致させる */
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  let remote = false;
+
+  try {
+    const info = await (await fetch(`${CONFIG.API_BASE}/privacy`, { cache: 'no-store' })).json();
+    remote = info.storage === 'db';
+
+    if (remote && info.retentionDays && info.retentionDays.session) {
+      const d = info.retentionDays.session;
+      $('pRetention').textContent =
+        `ご回答の記録は、受験日から${d}日（約${Math.round(d / 30)}ヶ月）の経過をもって自動的に削除されます。`;
+    } else {
+      $('pRetention').textContent =
+        'このページはデモです。ご入力の内容は、ご覧の端末内にのみ保存され、サーバーへは送信されません。';
+    }
+
+    $('pAi').textContent = info.aiProvider
+      ? `ご回答の内容は、評価の作成のため ${info.aiProvider} へ送信され、分析されます。`
+      : 'このページはデモのため、ご回答が外部のAIサービスへ送信されることはありません。';
+
+    if (info.contact) $('pContact').textContent = `本件に関するお問い合わせ先：${info.contact}`;
+  } catch (_) {
+    $('pRetention').textContent = 'このページはデモです。ご入力の内容は、ご覧の端末内にのみ保存されます。';
+    $('pAi').textContent = 'このページはデモのため、ご回答が外部のAIサービスへ送信されることはありません。';
+  }
+
+  // デモではサーバーに保存されていないので、請求の受け口も出さない
+  if (!remote) {
+    $('delForm').hidden = true;
+    $('delLocal').hidden = false;
+    $('delLocal').textContent =
+      'このページはデモのため、削除のご請求は受け付けておりません。'
+      + 'ご入力の内容は、ブラウザの履歴やサイトデータを消去すると完全に消えます。';
+    return;
+  }
+
+  $('delForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('delBtn');
+    btn.disabled = true;
+    try {
+      const res = await fetch(`${CONFIG.API_BASE}/privacy`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'request',
+          name: $('dName').value.trim(),
+          email: $('dEmail').value.trim(),
+          message: $('dMessage').value.trim(),
+          token: new URLSearchParams(location.search).get('token') || '',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '送信できませんでした。');
+
+      $('delForm').hidden = true;
+      $('delDone').hidden = false;
+      $('delDone').textContent =
+        '削除のご請求を承りました。担当者が内容を確認のうえ対応いたします。'
+        + 'ご対応の完了後、ご連絡先へご案内いたします。';
+    } catch (err) {
+      alert(err.message);
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>

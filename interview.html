@@ -153,11 +153,45 @@
         結果は後日、あらためてご連絡いたします。
       </div>
 
+      <!-- 個人情報の取り扱い。何が起きるかを、同意の前に具体的に示す -->
+      <details class="consent" id="consentBox">
+        <summary>個人情報の取り扱いについて（必ずお読みください）</summary>
+        <dl class="consent__list">
+          <dt>取得する情報</dt>
+          <dd>お名前、応募職種、ご回答の内容、設問ごとの所要時間</dd>
+
+          <dt>利用目的</dt>
+          <dd>本選考の判断材料としてのみ使用します。他の目的には使用しません。</dd>
+
+          <dt>AIによる処理</dt>
+          <dd id="consentAi">
+            ご回答の内容は、評価の作成のためにAIサービスへ送信され、分析されます。
+          </dd>
+
+          <dt>保存期間</dt>
+          <dd id="consentRetention">選考終了後、一定期間の経過をもって削除します。</dd>
+
+          <dt>第三者への提供</dt>
+          <dd>上記のAIサービスによる処理を除き、第三者へ提供することはありません。</dd>
+
+          <dt>合否の決定</dt>
+          <dd>
+            <strong>AIの評価のみで合否が決まることはありません。</strong>
+            採用担当者がご回答を確認したうえで判断します。
+          </dd>
+
+          <dt>削除のご請求</dt>
+          <dd>
+            ご自身のデータの削除をご希望の場合は、いつでもお申し出いただけます。
+            <a href="privacy.html" target="_blank" rel="noopener">こちらのページ</a>からご請求ください。
+          </dd>
+        </dl>
+      </details>
+
       <label class="agree-row">
         <input type="checkbox" id="agree">
         <span>
-          回答内容が選考の資料として保存されること、
-          およびAIによる一次評価が行われることに同意します。
+          上記の個人情報の取り扱いを確認し、同意します。
         </span>
       </label>
 

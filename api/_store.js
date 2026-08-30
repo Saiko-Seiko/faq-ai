@@ -272,8 +272,153 @@ async function updateCandidate(token, { revoke, extendDays, invited, actor = 'hr
   return rows.length ? toCandidate(rows[0]) : null;
 }
 
+/* ============================================================
+   Stage 4: 個人情報の運用
+   ============================================================ */
+
+/* 保存期間。クライアントの規程に合わせて環境変数で変える。 */
+const RETENTION = {
+  session:   Number(process.env.RETENTION_DAYS_SESSION   || 180),
+  candidate: Number(process.env.RETENTION_DAYS_CANDIDATE || 365),
+  audit:     Number(process.env.RETENTION_DAYS_AUDIT     || 730),
+};
+
+function retentionPolicy() {
+  return { ...RETENTION };
+}
+
+/* ------------------------------------------------------------
+   完全削除
+   ------------------------------------------------------------
+   応募者からの削除請求と、保存期間切れの両方で使う。
+   論理削除（フラグを立てるだけ）にはしない。
+   「消してほしい」に対して「見えなくしました」では答えになっていないため。
+   ------------------------------------------------------------ */
+async function purgeCandidate(token, actor = 'hr') {
+  const q = db();
+  if (!q) return null;
+
+  const sessions = await q`DELETE FROM interview_sessions WHERE token = ${token} RETURNING id`;
+  await q`DELETE FROM candidates WHERE token = ${token}`;
+
+  // 監査ログには氏名も回答も残さない。「消したという事実」だけを残す。
+  await audit('data.purge', token, { sessions: sessions.length, reason: 'request' }, actor);
+  return { sessions: sessions.length };
+}
+
+async function purgeSession(id, actor = 'hr') {
+  const q = db();
+  if (!q) return null;
+  await q`DELETE FROM interview_sessions WHERE id = ${id}`;
+  await audit('data.purge', id, { reason: 'request' }, actor);
+  return true;
+}
+
+/* ------------------------------------------------------------
+   保存期間切れの自動削除（毎日1回、cron から呼ばれる）
+   ------------------------------------------------------------ */
+async function purgeExpired() {
+  const q = db();
+  if (!q) return null;
+
+  const days = (n) => `${Math.max(1, n)} days`;
+
+  // 面接記録
+  const sessions = await q`
+    DELETE FROM interview_sessions
+    WHERE finished_at < now() - ${days(RETENTION.session)}::interval
+    RETURNING id
+  `;
+
+  // 候補者（面接記録が残っているものは消さない。先に記録が消えてから）
+  const candidates = await q`
+    DELETE FROM candidates
+    WHERE created_at < now() - ${days(RETENTION.candidate)}::interval
+      AND NOT EXISTS (
+        SELECT 1 FROM interview_sessions s WHERE s.token = candidates.token
+      )
+    RETURNING token
+  `;
+
+  // 操作ログ
+  const audits = await q`
+    DELETE FROM audit_log
+    WHERE at < now() - ${days(RETENTION.audit)}::interval
+    RETURNING id
+  `;
+
+  const result = {
+    sessions: sessions.length,
+    candidates: candidates.length,
+    auditEntries: audits.length,
+  };
+
+  // 何を消したかは件数だけ記録する（個人を特定できる情報は書かない）
+  await audit('data.purge_expired', null, { ...result, retention: RETENTION }, 'system');
+  return result;
+}
+
+/* ------------------------------------------------------------
+   削除請求
+   ------------------------------------------------------------ */
+async function createDeletionRequest({ token, name, email, message }) {
+  const q = db();
+  if (!q) return null;
+  const rows = await q`
+    INSERT INTO deletion_requests (token, name, email, message)
+    VALUES (${token || null}, ${name || null}, ${email || null}, ${message || ''})
+    RETURNING id, requested_at
+  `;
+  // 依頼内容そのものは監査ログに書かない（本文に個人情報が含まれうるため）
+  await audit('deletion.request', String(rows[0].id), {}, 'candidate');
+  return rows[0];
+}
+
+async function listDeletionRequests() {
+  const q = db();
+  if (!q) return [];
+  const rows = await q`
+    SELECT * FROM deletion_requests
+    ORDER BY (status = 'open') DESC, requested_at DESC
+    LIMIT 200
+  `;
+  return rows.map((r) => ({
+    id: r.id,
+    requestedAt: r.requested_at,
+    token: r.token,
+    name: r.name,
+    email: r.email,
+    message: r.message,
+    status: r.status,
+    handledAt: r.handled_at,
+    note: r.note,
+  }));
+}
+
+/* 対応済みにする。対応と同時に、依頼に含まれる個人情報も消す。 */
+async function closeDeletionRequest(id, { status = 'done', note = '', actor = 'hr' }) {
+  const q = db();
+  if (!q) return null;
+  const rows = await q`
+    UPDATE deletion_requests SET
+      status     = ${status},
+      handled_at = now(),
+      handled_by = ${actor},
+      note       = ${note},
+      name       = NULL,
+      email      = NULL,
+      message    = ''
+    WHERE id = ${id}
+    RETURNING id, status
+  `;
+  await audit('deletion.close', String(id), { status }, actor);
+  return rows.length ? rows[0] : null;
+}
+
 module.exports = {
   isEnabled, saveSession, listSessions, decideSession, audit,
   listCandidates, createCandidate, getCandidate,
   markStarted, markUsed, updateCandidate, statusOf,
+  retentionPolicy, purgeCandidate, purgeSession, purgeExpired,
+  createDeletionRequest, listDeletionRequests, closeDeletionRequest,
 };

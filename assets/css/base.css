@@ -268,3 +268,20 @@ h1, h2, h3, h4 { line-height: 1.4; margin: 0; font-weight: 700; letter-spacing: 
 }
 .welcome__steps b { display: block; font-size: 14px; }
 .welcome__steps span { font-size: 12.5px; color: var(--text-muted); line-height: 1.7; }
+
+/* ---------- 個人情報の取り扱い（同意前の開示） ---------- */
+.consent {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface-2); font-size: 13px;
+}
+.consent > summary {
+  cursor: pointer; padding: 12px 14px; font-weight: 700; font-size: 13.5px;
+  list-style: revert;
+}
+.consent > summary:hover { color: var(--accent); }
+.consent__list { margin: 0; padding: 0 14px 14px; }
+.consent__list dt {
+  font-weight: 700; font-size: 12px; color: var(--text-muted);
+  margin-top: 12px; letter-spacing: .02em;
+}
+.consent__list dd { margin: 3px 0 0; line-height: 1.8; }

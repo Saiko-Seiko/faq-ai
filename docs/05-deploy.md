@@ -66,7 +66,7 @@ Project Settings → Environment Variables
 - [ ] ライブモードで質問 → 回答が返る
 - [ ] `/interview?token=demo-tanaka` — 面接が最後まで進む
 - [ ] `/dashboard` — 候補者が並び、合否ボタンが押せる
-- [ ] `/_selftest.html` — 57項目すべて OK になる
+- [ ] `/_selftest.html` — 59項目すべて OK になる
 
 `cleanUrls` を有効にしているので、URLは `.html` なしで届く
 （`/briefing`、`/interview?token=...`）。`.html` 付きでも自動で転送される。
@@ -270,3 +270,31 @@ psql "$DATABASE_URL" -f db/002_candidates.sql
 - [ ] 最後まで受験する → もう一度同じURLを開くと「受付済みです」と出る
 - [ ] 「無効にする」を押した候補者のURLは開けない
 - [ ] 期限を過ぎたURLは開けない（期限を1日にして翌日確認、または直接DBを書き換えて確認）
+
+### Stage 4 のマイグレーションと設定
+
+```bash
+psql "$DATABASE_URL" -f db/003_privacy.sql
+```
+
+環境変数（すべて任意。未設定なら既定値で動く）:
+
+| Name | 既定 | 意味 |
+|---|---|---|
+| `RETENTION_DAYS_SESSION` | 180 | 面接記録の保存日数 |
+| `RETENTION_DAYS_CANDIDATE` | 365 | 候補者の保存日数 |
+| `RETENTION_DAYS_AUDIT` | 730 | 操作ログの保存日数 |
+| `CRON_SECRET` | なし | 設定すると自動削除を外部から叩けなくなる。**本番では設定すること** |
+| `PRIVACY_CONTACT` | なし | 応募者向けページに出す問い合わせ先 |
+
+自動削除は `vercel.json` の `crons` で毎日 18:00 UTC（日本時間 翌3:00）に実行される。
+
+確認：
+
+- [ ] `/privacy` を開くと、実際の保存期間が表示される
+- [ ] 面接の開始画面で「個人情報の取り扱いについて」を開くと、同じ期間が出る
+- [ ] `/privacy` の削除請求フォームから送信できる
+- [ ] 人事画面で候補者を開き「この記録を完全に削除」→ 一覧から消える
+- [ ] `/api/cleanup` を手で叩く（`CRON_SECRET` 設定時は Bearer 付き）
+      → `{"ok":true,"deleted":{...}}` が返る
+- [ ] Vercel の Cron ジョブ一覧に `/api/cleanup` が登録されている
