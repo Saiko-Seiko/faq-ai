@@ -3,9 +3,135 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>人事ダッシュボード（準備中）｜AI採用システム デモ</title>
+<title>人事ダッシュボード｜AI採用システム デモ</title>
+<meta name="description" content="AI面接の回答ログとスコアを確認し、人事担当者が合否を判断する画面。">
 <meta name="robots" content="noindex, nofollow">
 <link rel="stylesheet" href="assets/css/base.css">
+<style>
+  /* メーターの下地は、塗りと同じ系統の淡い色にする（青の上の青）。
+     灰色の溝にすると、点数の低さと「空き」の区別がつきにくくなるため。 */
+  :root {
+    --track:        #dcebee;
+    --track-warn:   #f4e8d2;
+    --track-danger: #f5dede;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --track:        #16323a;
+      --track-warn:   #33280f;
+      --track-danger: #331a1a;
+    }
+  }
+
+  .page-head { padding: 24px 0 16px; display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+  .page-head h1 { font-size: clamp(19px, 3.2vw, 24px); }
+  .page-head p { margin: 6px 0 0; font-size: 13.5px; color: var(--text-muted); }
+  .page-head__spacer { flex: 1; }
+
+  .layout {
+    display: grid; gap: 18px; align-items: start;
+    grid-template-columns: 340px minmax(0, 1fr);
+    padding-bottom: 56px;
+  }
+  @media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+  /* ---------- 候補者一覧 ---------- */
+  .list-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 13px 16px; border-bottom: 1px solid var(--border-soft);
+    font-size: 12.5px; font-weight: 700; color: var(--text-faint); letter-spacing: .05em;
+  }
+  .list { padding: 6px; display: grid; gap: 2px; max-height: 74vh; overflow-y: auto; }
+  @media (max-width: 900px) { .list { max-height: none; } }
+
+  .row {
+    display: flex; gap: 12px; align-items: flex-start; text-align: left; width: 100%;
+    padding: 11px 12px; border: 0; border-radius: 10px;
+    background: transparent; cursor: pointer; color: inherit;
+  }
+  .row:hover { background: var(--surface-2); }
+  .row.is-active { background: var(--accent-soft); }
+
+  .row__score { flex: none; width: 46px; text-align: center; padding-top: 2px; }
+  .row__score b { display: block; font-size: 20px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .row__score i { font-style: normal; font-size: 11px; color: var(--text-faint); }
+  .row.is-active .row__score b { color: var(--accent); }
+
+  .row__body { display: grid; gap: 3px; min-width: 0; }
+  .row__name { font-weight: 700; font-size: 14.5px; }
+  .row__role { font-size: 12px; color: var(--text-muted); }
+  .row__meta { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 3px; }
+
+  /* ---------- 詳細 ---------- */
+  .detail-head {
+    display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap;
+    padding: 20px; border-bottom: 1px solid var(--border-soft);
+  }
+  /* 1画面にひとつだけの主役の数字 */
+  .hero {
+    flex: none; text-align: center; min-width: 96px;
+    padding: 10px 16px; border-radius: var(--radius); background: var(--surface-2);
+  }
+  .hero b { display: block; font-size: 46px; line-height: 1; font-weight: 700; }
+  .hero span { font-size: 11.5px; color: var(--text-muted); }
+
+  .detail-id { min-width: 0; flex: 1; }
+  .detail-id h2 { font-size: 19px; }
+  .detail-id .role { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+  .detail-id .meta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 9px; font-size: 12px; color: var(--text-faint); }
+
+  .sec { padding: 20px; border-bottom: 1px solid var(--border-soft); }
+  .sec:last-child { border-bottom: 0; }
+  .sec > h3 {
+    font-size: 12px; font-weight: 700; letter-spacing: .07em;
+    color: var(--text-faint); margin-bottom: 14px;
+  }
+
+  /* ---------- スコアの内訳（メーター） ---------- */
+  .meters { display: grid; gap: 16px; }
+  @media (min-width: 640px) { .meters { grid-template-columns: 1fr 1fr; gap: 16px 24px; } }
+
+  .meter__head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+  .meter__label { font-size: 13.5px; font-weight: 700; }
+  .meter__value { margin-left: auto; font-size: 15px; font-weight: 700; }
+  .meter__value i { font-style: normal; font-size: 11px; color: var(--text-faint); font-weight: 400; }
+
+  .meter__track { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
+  .meter__fill { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+  .meter__fill--warn   { background: var(--warn); }
+  .meter__fill--danger { background: var(--danger); }
+  .meter__desc { margin: 6px 0 0; font-size: 11.5px; color: var(--text-faint); line-height: 1.6; }
+
+  .ai-comment {
+    white-space: pre-wrap; font-size: 13.5px; line-height: 1.85;
+    padding: 14px 16px; border-radius: var(--radius);
+    background: var(--surface-2); margin: 0;
+  }
+
+  /* ---------- 人による判断 ---------- */
+  .decide-box { border: 2px solid var(--accent); border-radius: var(--radius); padding: 16px; }
+  .decide-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+  .decide-btn {
+    flex: 1; min-width: 104px; padding: 11px; border-radius: 9px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface);
+    font-size: 14px; font-weight: 700; color: var(--text-muted);
+  }
+  .decide-btn:hover { border-color: currentColor; }
+  .decide-btn[data-decision="pass"].is-on   { background: var(--ok);     color: #fff; border-color: transparent; }
+  .decide-btn[data-decision="hold"].is-on   { background: var(--warn);   color: #fff; border-color: transparent; }
+  .decide-btn[data-decision="reject"].is-on { background: var(--danger); color: #fff; border-color: transparent; }
+
+  /* ---------- 問答ログ ---------- */
+  .transcript { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+  .qa { padding: 14px 16px; border-radius: var(--radius); background: var(--surface-2); }
+  .qa__q { font-size: 13.5px; font-weight: 700; line-height: 1.75; }
+  .qa__n {
+    display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 999px;
+    background: var(--accent); color: var(--accent-fg); font-size: 11px; vertical-align: 1px;
+  }
+  .qa__a { margin-top: 9px; font-size: 13.5px; line-height: 1.9; white-space: pre-wrap; }
+  .qa__t { margin-top: 8px; font-size: 11.5px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+</style>
 </head>
 <body>
 
@@ -22,28 +148,106 @@
   </div>
 </header>
 
-<p class="demo-banner">これは提案用のデモです。</p>
+<p class="demo-banner">
+  これは提案用のデモです。候補者・回答内容はすべて架空で、記録はこのブラウザ内にのみ保存されます。
+</p>
 
-<main class="wrap" style="padding:56px 0">
-  <div class="card card__pad stack" style="max-width:600px;margin-inline:auto">
-    <span class="badge badge--warn">Phase 3 で実装予定</span>
-    <h1 style="font-size:22px">人事担当者ダッシュボード</h1>
-    <p class="muted" style="margin:0">
-      候補者一覧（スコア順）と、候補者ごとの全問答ログ・AI所見・スコア内訳を表示する画面です。
-    </p>
-    <div class="note note--accent">
-      この画面が、提案書でお伝えした2点を形にする部分です。<br>
-      ・<strong>合否は人が決める</strong>（合格／不合格／保留を人事が押す）<br>
-      ・<strong>回答ログを見返せる</strong>（後から判断の根拠を確認できる）
+<main class="wrap">
+
+  <div class="page-head">
+    <div>
+      <h1>人事ダッシュボード</h1>
+      <p>AI面接の回答ログとスコアを確認し、合否を判断する画面です。</p>
     </div>
-    <a class="btn btn--ghost" href="index.html">トップへ戻る</a>
+    <span class="page-head__spacer"></span>
+    <button class="btn btn--ghost btn--sm" id="resetBtn" type="button">見本データに戻す</button>
+  </div>
+
+  <div class="note note--accent" style="margin-bottom:16px">
+    <strong>スコアはAIによる一次スクリーニングの参考値であり、合否の決定ではありません。</strong>
+    AIが行うのは回答内容の整理とスコア化までです。合格・不合格の判断は、
+    この画面で人事担当者が回答をお読みになったうえで確定してください。
+  </div>
+
+  <div class="layout">
+
+    <!-- ============ 候補者一覧 ============ -->
+    <div class="card">
+      <div class="list-head">候補者（スコア順）<span class="site-header__spacer"></span><span id="count">—</span></div>
+      <div class="list" id="list"></div>
+    </div>
+
+    <!-- ============ 詳細 ============ -->
+    <div>
+      <div class="card card__pad" id="empty" hidden>
+        <p class="muted" style="margin:0">左の一覧から候補者を選んでください。</p>
+      </div>
+
+      <div class="card" id="detail" hidden>
+
+        <div class="detail-head">
+          <div class="hero">
+            <b id="dTotal">—</b>
+            <span>／ 20点</span>
+          </div>
+          <div class="detail-id">
+            <h2 id="dName">—</h2>
+            <div class="role" id="dRole">—</div>
+            <div class="meta">
+              <span id="dBand" class="badge">—</span>
+              <span>受験日時 <span id="dWhen">—</span></span>
+              <span>所要時間 <span id="dDuration">—</span></span>
+              <span id="dMode">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ---- 人による判断（AIの評価より先に置く。ここが結論を出す場所） ---- -->
+        <div class="sec">
+          <h3>人事担当者による最終判断</h3>
+          <div class="decide-box">
+            <div id="decisionState"></div>
+            <div class="decide-row">
+              <button class="decide-btn" type="button" data-decision="pass">✓ 合格</button>
+              <button class="decide-btn" type="button" data-decision="hold">— 保留</button>
+              <button class="decide-btn" type="button" data-decision="reject">× 不合格</button>
+            </div>
+            <label class="field__label" for="memo">人事メモ（判断の理由を残しておくと、後から根拠を確認できます）</label>
+            <textarea class="textarea" id="memo" style="min-height:88px"
+                      placeholder="例：スコアは低いが、Q3の具体性が高い。一次面接で確認する。"></textarea>
+            <button class="btn btn--sm" id="memoSave" type="button" style="margin-top:10px">メモを保存</button>
+          </div>
+        </div>
+
+        <!-- ---- AIのスコア ---- -->
+        <div class="sec">
+          <h3>AIによる評価（参考値）</h3>
+          <div class="meters" id="meters"></div>
+          <p class="ai-comment" id="dComment" style="margin-top:18px">—</p>
+        </div>
+
+        <!-- ---- 全問答ログ ---- -->
+        <div class="sec">
+          <h3>回答ログ（全文）</h3>
+          <ul class="transcript" id="transcript"></ul>
+        </div>
+
+      </div>
+    </div>
+
   </div>
 </main>
 
 <footer class="site-footer">
-  <div class="wrap">AI採用システム デモ ／ 提案用のプロトタイプです。</div>
+  <div class="wrap">
+    AI採用システム デモ ／ 提案用のプロトタイプです。実在の企業・個人とは関係ありません。
+  </div>
 </footer>
 
+<script src="assets/js/knowledge.js"></script>
 <script src="assets/js/app.js"></script>
+<script src="assets/js/interview-data.js"></script>
+<script src="assets/js/dashboard-seed.js"></script>
+<script src="assets/js/dashboard.js"></script>
 </body>
 </html>

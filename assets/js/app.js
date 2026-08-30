@@ -47,6 +47,30 @@ const Store = {
 };
 
 /* ------------------------------------------------------------
+   面接の回答ログ
+   ------------------------------------------------------------
+   ★ デモ限定 ★ localStorage に保存している。
+   本番はサーバーのデータベースに保存し、保存期間と削除方針を
+   個人情報保護方針に沿って定める必要がある。
+
+   AI面接（interview.js）が書き込み、
+   人事ダッシュボード（dashboard.js）が読み書きするため、共通側に置く。
+   ------------------------------------------------------------ */
+const Sessions = {
+  all() {
+    const list = Store.get(CONFIG.KEY_SESSIONS, []);
+    return Array.isArray(list) ? list : [];
+  },
+  save(record) {
+    const list = Sessions.all();
+    const at = list.findIndex((r) => r.id === record.id);
+    if (at >= 0) list[at] = record; else list.push(record);
+    Store.set(CONFIG.KEY_SESSIONS, list);
+    return record;
+  },
+};
+
+/* ------------------------------------------------------------
    モード — demo（APIキー不要）／ live（Claude API を実際に呼ぶ）
    既定は必ず demo。商談中に通信やキーの都合で止まらないための保険。
    ------------------------------------------------------------ */
