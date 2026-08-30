@@ -17,3 +17,8 @@ secrets.json
 tmp/
 *.log
 
+
+# Node / Vercel
+node_modules/
+.vercel
+.env*.local

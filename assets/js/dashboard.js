@@ -19,13 +19,19 @@ const Dashboard = (() => {
 
   const $ = (id) => document.getElementById(id);
 
-  /* ---------- 読み込み ---------- */
+  /* ---------- 読み込み ----------
+     見本データは常に残す。
+     「記録が空のときだけ入れる」方式にしていたところ、
+     デモ中に1件でも面接を受けると見本が消え、
+     商談で見せたい候補者（鈴木さん）がいなくなってしまった。
+     実際に受けた面接は、見本データに追加される形にする。 */
   function load() {
-    const saved = Sessions.all();
-    // 記録が空のときだけ、見本データを流し込む（商談で空の画面を見せないため）
-    records = saved.length ? saved : SEED_SESSIONS.slice();
-    if (!saved.length) Store.set(CONFIG.KEY_SESSIONS, records);
+    const byId = new Map(SEED_SESSIONS.map((s) => [s.id, s]));
+    // 保存済みを後から重ねる。人事の判断が入っている場合はそちらが優先。
+    for (const r of Sessions.all()) byId.set(r.id, r);
 
+    records = Array.from(byId.values());
+    persist();
     records.sort((a, b) => b.total - a.total);
   }
 
@@ -178,7 +184,7 @@ const Dashboard = (() => {
   }
 
   function resetSeed() {
-    if (!confirm('保存されている面接記録をすべて削除し、見本データに戻します。よろしいですか？')) return;
+    if (!confirm('この端末に保存された面接記録（実際に受けたものを含む）をすべて削除し、見本データだけの状態に戻します。よろしいですか？')) return;
     Store.set(CONFIG.KEY_SESSIONS, SEED_SESSIONS.slice());
     selectedId = null;
     load();

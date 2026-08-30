@@ -272,36 +272,13 @@ const Chat = (() => {
     return { text: best.entry.a + extra, sources, id: best.entry.id };
   }
 
-  /* ---------- 回答（ライブモード） ---------- */
-  function buildSystemPrompt() {
-    const kb = KNOWLEDGE
-      .map((e) => `## ${e.category}｜${e.q}\n${e.a}`)
-      .join('\n\n');
-
-    return [
-      `あなたは${COMPANY.name}の採用担当AIです。会社説明会ページで、求職者からの質問に答えます。`,
-      '',
-      '守ること:',
-      '1. 回答は必ず下記の「社内資料」の内容だけを根拠にすること。書かれていないことは推測で答えない。',
-      '2. 資料にない質問には「手元の資料では確認できないため、採用担当（recruit@example.invalid）へお繋ぎします」と答えること。',
-      '3. 求職者に向けた、丁寧で温かい日本語で答えること。',
-      '4. 200文字程度を目安に簡潔に。箇条書きが分かりやすい場合は使ってよい。',
-      '5. 合否や選考結果の見通しについては答えず、「選考は人事担当者が判断します」と伝えること。',
-      '',
-      '=== 社内資料 ===',
-      kb,
-    ].join('\n');
-  }
-
+  /* ---------- 回答（ライブモード） ----------
+     システムプロンプトとナレッジの組み立てはサーバー側（api/chat.js）が行う。
+     ブラウザは会話履歴を渡すだけ。 */
   async function answerFromClaude(query) {
     history.push({ role: 'user', content: query });
 
-    const text = await callClaude({
-      system: buildSystemPrompt(),
-      messages: history.slice(-10),
-      maxTokens: 2048,
-      effort: 'low', // 資料を引く用途なので低めに。速度を優先。
-    });
+    const { text } = await callApi('chat', { messages: history.slice(-10) });
 
     history.push({ role: 'assistant', content: text });
 

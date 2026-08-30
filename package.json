@@ -1,0 +1,12 @@
+{
+  "name": "faq-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI採用デモ — 会社説明会チャット / AI面接官 / 人事ダッシュボード",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.122.0"
+  }
+}

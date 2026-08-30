@@ -99,62 +99,16 @@ function evaluateByRules(answers) {
   return { scores, total, comment };
 }
 
-/* ---------- ライブモード：Claude による評価 ---------- */
-function buildEvalSystemPrompt() {
-  return [
-    `あなたは${COMPANY.name}の採用一次スクリーニングを補助するAIです。`,
-    '候補者のオンライン面接の回答を読み、4つの観点で評価してください。',
-    '',
-    '評価軸（各1〜5点の整数）:',
-    ...AXES.map((a) => `- ${a.key}（${a.label}）: ${a.desc}`),
-    '',
-    '守ること:',
-    '1. 回答に書かれている事実だけを根拠にする。書かれていないことを補って評価しない。',
-    '2. 合否は判定しない。あなたの役割はスコアと所見の作成まで。',
-    '3. 年齢・性別・出身・家族構成など、業務と関係のない属性を評価に含めない。',
-    '4. comment には、各点数の根拠を候補者の発言に触れながら日本語で書く（300文字程度）。',
-    '',
-    '出力は次のJSONのみ。前後に説明文やコードブロックを付けないこと:',
-    '{"motivation":3,"experience":4,"communication":3,"culture":4,"comment":"…"}',
-  ].join('\n');
-}
-
-function extractJson(text) {
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start < 0 || end <= start) return null;
-  try {
-    return JSON.parse(text.slice(start, end + 1));
-  } catch (_) {
-    return null;
-  }
-}
-
+/* ---------- ライブモード：Claude による評価 ----------
+   評価の指示・スコアの検証はサーバー側（api/interview.js）が行う。
+   評価基準をブラウザに置くと候補者から読めてしまうため、サーバーに寄せている。 */
 async function evaluateByClaude(answers) {
-  const transcript = answers
-    .map((a, i) => `【質問${i + 1}】${a.question}\n【回答】${a.text || '（無回答）'}`)
-    .join('\n\n');
-
-  const text = await callClaude({
-    system: buildEvalSystemPrompt(),
-    messages: [{ role: 'user', content: transcript }],
-    maxTokens: 4096,
-    effort: 'high', // 人の選考に関わる判断なので、速度より精度を優先する
+  const payload = answers.map((a) => ({ question: a.question, text: a.text }));
+  const { scores, total, comment } = await callApi('interview', {
+    action: 'evaluate',
+    answers: payload,
   });
-
-  const parsed = extractJson(text);
-  if (!parsed) throw new Error('評価結果を解釈できませんでした。');
-
-  const scores = {};
-  for (const axis of AXES) {
-    const v = Number(parsed[axis.key]);
-    scores[axis.key] = Number.isFinite(v) ? clamp5(v) : 3;
-  }
-  const total = Object.values(scores).reduce((s, n) => s + n, 0);
-
-  const comment = `${String(parsed.comment || '').trim()}\n\n`
-    + '※この評価は一次スクリーニングの参考値です。合否は人事担当者が回答内容を確認したうえで判断してください。';
-
+  if (!scores || typeof total !== 'number') throw new Error('評価結果を受け取れませんでした。');
   return { scores, total, comment };
 }
 
@@ -165,20 +119,13 @@ async function followUpQuestion(answers) {
 
   if (Mode.isLive() && body) {
     try {
-      const text = await callClaude({
-        system: [
-          'あなたは採用面接官です。候補者の回答を読み、もう一歩踏み込んで聞く質問を1つだけ作ってください。',
-          '条件: 日本語の丁寧語。80文字以内。質問文のみを出力し、前置きや記号を付けない。',
-          '年齢・性別・家族構成など業務と無関係な属性は聞かない。',
-        ].join('\n'),
-        messages: [{ role: 'user', content: `候補者の回答:\n${body}` }],
-        maxTokens: 1024,
-        effort: 'low',
+      const { question } = await callApi('interview', {
+        action: 'followup',
+        answers: [{ question: target.question, text: body }],
       });
-      const q = text.trim().split('\n')[0];
-      if (q) return q;
+      if (question) return question;
     } catch (_) {
-      /* 失敗しても面接は止めない。下の定型question に落とす。 */
+      /* 失敗しても面接は止めない。下の定型の質問に落とす。 */
     }
   }
 

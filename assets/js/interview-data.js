@@ -45,8 +45,10 @@ const QUESTIONS = [
   {
     id: 'q2',
     axis: 'motivation',
-    /* COMPANY は knowledge.js 側の定義。interview.html で先に読み込んでいる。 */
-    text: `当社（${COMPANY.name}）を志望された理由を教えてください。`,
+    /* 社名は画面上に出ているので、設問では「当社」で足りる。
+       こう書いておくと、このファイルが knowledge.js に依存せず、
+       サーバー（api/interview.js）からもそのまま読める。 */
+    text: '当社を志望された理由を教えてください。',
     hint: '数ある会社の中で、なぜ当社だったのかをお聞かせください。',
   },
   {
@@ -105,4 +107,12 @@ const SCORE_BANDS = [
 
 function scoreBand(total) {
   return SCORE_BANDS.find((b) => total >= b.min) || SCORE_BANDS[SCORE_BANDS.length - 1];
+}
+
+/* ------------------------------------------------------------
+   ブラウザとサーバー（Vercel の api/）で同じ定義を使うための橋渡し。
+   質問と評価軸が2箇所に分かれると、必ずどちらかが古くなるため。
+   ------------------------------------------------------------ */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { CANDIDATES, QUESTIONS, AXES, SCORE_BANDS, scoreBand };
 }

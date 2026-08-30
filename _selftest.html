@@ -70,8 +70,42 @@ window.addEventListener('unhandledrejection', (e) => {
 });
 setTimeout(() => { if (document.title === 'SELFTEST RUNNING') { errors.push('timeout'); finishReport(); } }, 120000);
 
+/* サーバー側（api/*.js）はこの環境に Node が無く実行できない。
+   せめて構文だけは確かめる。new Function はコードを解析するが実行はしないので、
+   require や module が未定義でも問題なく、構文エラーだけを拾える。 */
+async function syntaxCheck(paths) {
+  for (const p of paths) {
+    try {
+      const src = await (await fetch(p)).text();
+      if (!src.trim()) throw new Error('空ファイル');
+      new Function(src); // eslint-disable-line no-new-func
+      check(`構文: ${p}`, true);
+    } catch (e) {
+      check(`構文: ${p}`, false, e.message.slice(0, 60));
+    }
+  }
+}
+
 (async function run() {
   window.addEventListener('error', (e) => errors.push(`harness: ${e.message}`));
+
+  /* ============ 0. 全JSの構文確認（サーバー側を含む） ============ */
+  await syntaxCheck([
+    'api/_claude.js', 'api/chat.js', 'api/interview.js', 'api/health.js',
+    'assets/js/app.js', 'assets/js/knowledge.js', 'assets/js/interview-data.js',
+    'assets/js/briefing.js', 'assets/js/interview.js',
+    'assets/js/dashboard.js', 'assets/js/dashboard-seed.js',
+  ]);
+
+  // JSON も壊れていないか
+  for (const p of ['package.json', 'vercel.json']) {
+    try {
+      JSON.parse(await (await fetch(p)).text());
+      check(`構文: ${p}`, true);
+    } catch (e) {
+      check(`構文: ${p}`, false, e.message.slice(0, 60));
+    }
+  }
 
   /* ============ ① 会社説明会：実際に質問する ============ */
   {
@@ -176,7 +210,8 @@ setTimeout(() => { if (document.title === 'SELFTEST RUNNING') { errors.push('tim
     const f = await loadFrame('dashboard.html');
     const w = win(f); const d = w.document;
 
-    check('dashboard: 候補者が並ぶ', n(d, '.row') >= 3, `rows=${n(d, '.row')}`);
+    // 面接を1件受けたあとでも、見本3件が消えずに並んでいること
+    check('dashboard: 見本3件＋実施した面接が並ぶ', n(d, '.row') >= 4, `rows=${n(d, '.row')}`);
 
     // 台本の山場：スコア9点の鈴木さんを人事が「合格」にできるか
     const suzuki = d.querySelector('[data-id="seed-suzuki"]');

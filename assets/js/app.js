@@ -4,17 +4,11 @@
    ============================================================ */
 
 const CONFIG = {
-  /* Claude API */
-  MODEL: 'claude-opus-5',
-  API_URL: 'https://api.anthropic.com/v1/messages',
-  API_VERSION: '2023-06-01',
-
-  /* 拒否時の自動フォールバック。万一 400 になる環境では false にすれば切れる */
-  USE_FALLBACKS: true,
-  FALLBACK_BETA: 'server-side-fallback-2026-07-01',
+  /* サーバー側（Vercel の /api）の窓口。
+     ブラウザは Claude を直接呼ばない。APIキーはサーバーにしか無い。 */
+  API_BASE: '/api',
 
   /* localStorage のキー */
-  KEY_APIKEY: 'faqai.apikey',
   KEY_MODE: 'faqai.mode',
   KEY_SESSIONS: 'faqai.sessions',
 };
@@ -75,79 +69,56 @@ const Sessions = {
    既定は必ず demo。商談中に通信やキーの都合で止まらないための保険。
    ------------------------------------------------------------ */
 const Mode = {
+  /* サーバーが応答し、かつAPIキーが設定されているときだけライブが使える。
+     ローカルで index.html を直接開いた場合は false のまま。 */
+  serverReady: false,
+
   get() {
-    return Store.get(CONFIG.KEY_MODE, 'demo') === 'live' && Mode.hasKey() ? 'live' : 'demo';
+    return Store.get(CONFIG.KEY_MODE, 'demo') === 'live' && Mode.serverReady ? 'live' : 'demo';
   },
   set(mode) {
     Store.set(CONFIG.KEY_MODE, mode === 'live' ? 'live' : 'demo');
     document.dispatchEvent(new CustomEvent('modechange', { detail: { mode: Mode.get() } }));
   },
   isLive() { return Mode.get() === 'live'; },
-  hasKey() { return !!Store.get(CONFIG.KEY_APIKEY, ''); },
-  key() { return Store.get(CONFIG.KEY_APIKEY, ''); },
+
+  /** 起動時に1度だけ、サーバーが使えるかを確かめる。 */
+  async probe() {
+    try {
+      const res = await fetch(`${CONFIG.API_BASE}/health`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('unavailable');
+      const info = await res.json();
+      Mode.serverReady = !!info.configured;
+      Mode.model = info.model || '';
+    } catch (_) {
+      // file:// で開いた場合や、未デプロイの場合はここに来る。デモモードで動かす。
+      Mode.serverReady = false;
+    }
+    document.dispatchEvent(new CustomEvent('modechange', { detail: { mode: Mode.get() } }));
+    return Mode.serverReady;
+  },
 };
 
 /* ------------------------------------------------------------
-   Claude API（Messages API）をブラウザから直接呼ぶ
+   サーバー側の窓口を呼ぶ
    ------------------------------------------------------------
-   ⚠ これはデモ専用の割り切り。
-   ブラウザにAPIキーを置くとページを開いた人に読まれる。
-   本番ではキーをサーバ側に置き、ブラウザからは自社APIを叩く構成にする。
+   Claude を呼ぶのはサーバー（/api/*）だけ。
+   ブラウザにAPIキーは一切置かない。
    ------------------------------------------------------------ */
-async function callClaude({ system, messages, maxTokens = 4096, effort = 'low' }) {
-  const apiKey = Mode.key();
-  if (!apiKey) throw new Error('APIキーが設定されていません。');
-
-  const headers = {
-    'content-type': 'application/json',
-    'x-api-key': apiKey,
-    'anthropic-version': CONFIG.API_VERSION,
-    // ブラウザから直接呼ぶための明示的なオプトイン
-    'anthropic-dangerous-direct-browser-access': 'true',
-  };
-
-  const body = {
-    model: CONFIG.MODEL,
-    max_tokens: maxTokens,
-    system,
-    messages,
-    output_config: { effort },
-  };
-
-  if (CONFIG.USE_FALLBACKS) {
-    headers['anthropic-beta'] = CONFIG.FALLBACK_BETA;
-    body.fallbacks = 'default';
-  }
-
-  const res = await fetch(CONFIG.API_URL, {
+async function callApi(path, payload) {
+  const res = await fetch(`${CONFIG.API_BASE}/${path}`, {
     method: 'POST',
-    headers,
-    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
   });
 
+  let data = null;
+  try { data = await res.json(); } catch (_) { /* 本文が無い場合もある */ }
+
   if (!res.ok) {
-    let detail = '';
-    try {
-      const err = await res.json();
-      detail = err?.error?.message || '';
-    } catch (_) { /* JSON でないエラー本文は無視 */ }
-    throw new Error(`APIエラー (${res.status}) ${detail}`.trim());
+    throw new Error((data && data.error) || `サーバーエラー (${res.status})`);
   }
-
-  const data = await res.json();
-
-  // 安全性の判定で応答が断られた場合。content を読む前に必ず確認する。
-  if (data.stop_reason === 'refusal') {
-    throw new Error('この内容にはお答えできませんでした。質問を変えてお試しください。');
-  }
-
-  const text = (data.content || [])
-    .filter((b) => b.type === 'text')
-    .map((b) => b.text)
-    .join('')
-    .trim();
-
-  return text;
+  return data || {};
 }
 
 /* ------------------------------------------------------------
@@ -198,25 +169,17 @@ function mountSettings() {
           </span>
         </label>
 
-        <label class="mode-option">
+        <label class="mode-option" id="liveOption">
           <input type="radio" name="mode" value="live">
           <span>
             <strong>ライブモード</strong>
-            <span class="hint">Claude API（${CONFIG.MODEL}）を実際に呼び出します。APIキーと通信が必要です。</span>
+            <span class="hint" id="liveHint">サーバー経由で Claude を呼び出します。</span>
           </span>
         </label>
 
-        <div class="field">
-          <label class="field__label" for="apiKeyInput">Anthropic APIキー</label>
-          <input class="input" id="apiKeyInput" type="password" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
-          <p class="hint" style="margin:6px 0 0">
-            このブラウザの localStorage にのみ保存されます。サーバーへは送信しません。
-          </p>
-        </div>
-
-        <div class="note note--warn">
-          ⚠ ブラウザからAPIキーを使うのは<strong>デモ限定の構成</strong>です。
-          本番ではキーをサーバー側で保持し、ブラウザからは自社API経由で呼び出します。
+        <div class="note note--accent">
+          APIキーは<strong>サーバー側の環境変数にのみ</strong>保管しています。
+          ブラウザからは見えず、この画面で入力する必要もありません。
         </div>
 
         <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -228,7 +191,7 @@ function mountSettings() {
   `);
 
   const modal = document.getElementById('settingsModal');
-  const keyInput = document.getElementById('apiKeyInput');
+  const liveRadio = modal.querySelector('input[value="live"]');
 
   function paintButton() {
     const live = Mode.isLive();
@@ -236,10 +199,21 @@ function mountSettings() {
     document.getElementById('modeDot').className = `mode-dot ${live ? 'mode-dot--live' : ''}`;
   }
 
+  /* サーバーが使えるかどうかで、ライブモードの選択可否を切り替える */
+  function paintAvailability() {
+    const ready = Mode.serverReady;
+    liveRadio.disabled = !ready;
+    document.getElementById('liveOption').style.opacity = ready ? '1' : '.5';
+    document.getElementById('liveHint').textContent = ready
+      ? `サーバー経由で Claude（${Mode.model || 'claude-opus-5'}）を呼び出します。`
+      : 'このページはサーバーに接続されていないため使用できません。'
+        + '（ローカルでファイルを直接開いた場合、または環境変数 ANTHROPIC_API_KEY が未設定の場合）';
+  }
+
   function open() {
-    keyInput.value = Store.get(CONFIG.KEY_APIKEY, '') || '';
     const want = Store.get(CONFIG.KEY_MODE, 'demo');
-    modal.querySelector(`input[value="${want === 'live' ? 'live' : 'demo'}"]`).checked = true;
+    modal.querySelector(`input[value="${want === 'live' && Mode.serverReady ? 'live' : 'demo'}"]`).checked = true;
+    paintAvailability();
     modal.hidden = false;
   }
 
@@ -248,21 +222,17 @@ function mountSettings() {
   modal.addEventListener('click', (e) => { if (e.target === modal) modal.hidden = true; });
 
   document.getElementById('settingsSave').addEventListener('click', () => {
-    const key = keyInput.value.trim();
-    if (key) Store.set(CONFIG.KEY_APIKEY, key); else Store.remove(CONFIG.KEY_APIKEY);
-
     const picked = modal.querySelector('input[name="mode"]:checked').value;
-    if (picked === 'live' && !key) {
-      alert('ライブモードにはAPIキーが必要です。キーを入力するか、デモモードをお選びください。');
-      return;
-    }
     Mode.set(picked);
     modal.hidden = true;
     paintButton();
   });
 
-  document.addEventListener('modechange', paintButton);
+  document.addEventListener('modechange', () => { paintButton(); paintAvailability(); });
   paintButton();
+
+  // サーバーの状態を確認（失敗してもデモモードで動き続ける）
+  Mode.probe();
 }
 
 document.addEventListener('DOMContentLoaded', mountSettings);

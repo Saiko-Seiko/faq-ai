@@ -211,3 +211,11 @@ const VIDEO_CHAPTERS = [
 
 /* デモ用の想定尺（10分15秒） */
 const VIDEO_DURATION = 615;
+
+/* ------------------------------------------------------------
+   ブラウザとサーバー（Vercel の api/）で同じ定義を使うための橋渡し。
+   ブラウザでは module が存在しないので、この節は実行されない。
+   ------------------------------------------------------------ */
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { COMPANY, KNOWLEDGE, VIDEO_CHAPTERS, VIDEO_DURATION };
+}
