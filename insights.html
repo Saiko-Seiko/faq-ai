@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>運用の振り返り｜AI採用システム</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="assets/css/base.css">
+<style>
+  .page-head { padding: 24px 0 16px; }
+  .page-head h1 { font-size: clamp(19px, 3.2vw, 24px); }
+  .page-head p { margin: 6px 0 0; font-size: 13.5px; color: var(--text-muted); }
+
+  .sec { margin-bottom: 24px; }
+  .sec__head {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 13px 16px; border-bottom: 1px solid var(--border-soft);
+  }
+  .sec__head h2 { font-size: 14.5px; }
+  .sec__head .count { margin-left: auto; font-size: 12.5px; color: var(--text-faint); }
+
+  /* 判断ごとの平均スコア */
+  .tiles { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); padding: 16px; }
+  .tile { padding: 14px; border-radius: var(--radius); background: var(--surface-2); }
+  .tile__label { font-size: 12px; color: var(--text-muted); }
+  .tile__value { font-size: 30px; font-weight: 700; line-height: 1.2; margin-top: 4px; }
+  .tile__sub { font-size: 11.5px; color: var(--text-faint); }
+
+  /* 効き目の2枚 */
+  .impact { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; padding: 0 16px 16px; }
+  @media (max-width: 700px) { .impact { grid-template-columns: 1fr; } }
+  .impact__card { padding: 16px; border-radius: var(--radius); border: 2px solid var(--border); }
+  .impact__card.is-key { border-color: var(--ok); }
+  .impact__value { font-size: 34px; font-weight: 700; line-height: 1.1; }
+  .impact__title { font-size: 13px; font-weight: 700; margin-top: 6px; }
+  .impact__note { font-size: 12.5px; color: var(--text-muted); line-height: 1.75; margin-top: 6px; }
+
+  /* 軸ごとの判別力 */
+  table.axis { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.axis th, table.axis td { text-align: left; padding: 9px 16px; }
+  table.axis thead th { font-size: 11.5px; color: var(--text-faint); border-bottom: 1px solid var(--border-soft); }
+  table.axis td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.axis tr.advice td { padding-top: 0; padding-bottom: 12px; font-size: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border-soft); }
+
+  /* 答えられなかった質問 */
+  .miss { padding: 14px 16px; border-bottom: 1px solid var(--border-soft); }
+  .miss:last-child { border-bottom: 0; }
+  .miss__head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .miss__when { font-size: 11.5px; color: var(--text-faint); }
+  .miss__samples { margin: 9px 0 0; padding-left: 1.2em; font-size: 13.5px; line-height: 1.8; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header__inner">
+    <a class="brand" href="index.html"><span class="brand__mark">AI</span>AI採用システム</a>
+    <span class="site-header__spacer"></span>
+    <nav class="site-nav">
+      <a href="dashboard.html">選考状況</a>
+      <a href="candidates.html">候補者管理</a>
+      <a href="content.html">コンテンツ編集</a>
+      <a href="insights.html" aria-current="page">振り返り</a>
+    </nav>
+    <span id="whoami" class="site-who" hidden></span>
+    <span data-settings-slot></span>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="page-head">
+    <h1>運用の振り返り</h1>
+    <p>使うほど精度を上げるための画面です。AIの評価と、実際のご判断とのズレを見ます。</p>
+  </div>
+
+  <div class="card card__pad stack" id="needsDb" hidden style="max-width:620px">
+    <span class="badge badge--warn">データベース未接続</span>
+    <h2 style="font-size:17px">この画面はデモでは使用できません</h2>
+    <p class="muted" style="margin:0;font-size:13.5px">
+      振り返りには、実際の運用記録が必要です。
+    </p>
+    <a class="btn btn--ghost" href="index.html">トップへ戻る</a>
+  </div>
+
+  <div id="main">
+
+    <!-- ============ AIと人の判断 ============ -->
+    <div class="card sec">
+      <div class="sec__head">
+        <h2>AIの評価と、人事のご判断</h2>
+        <span class="count">判断済み <span id="decidedCount">—</span></span>
+      </div>
+
+      <p class="note note--warn" id="notEnough" hidden style="margin:16px 16px 0"></p>
+
+      <div class="tiles">
+        <div class="tile">
+          <div class="tile__label">合格とされた方の平均スコア</div>
+          <div class="tile__value" id="avgPass">—</div>
+          <div class="tile__sub"><span id="cntPass">—</span>／20点満点</div>
+        </div>
+        <div class="tile">
+          <div class="tile__label">保留とされた方</div>
+          <div class="tile__value" id="avgHold">—</div>
+          <div class="tile__sub"><span id="cntHold">—</span></div>
+        </div>
+        <div class="tile">
+          <div class="tile__label">不合格とされた方</div>
+          <div class="tile__value" id="avgReject">—</div>
+          <div class="tile__sub"><span id="cntReject">—</span></div>
+        </div>
+      </div>
+
+      <div class="impact">
+        <div class="impact__card is-key">
+          <div class="impact__value" id="rescued">—</div>
+          <div class="impact__title">AIは低評価、人事はご合格</div>
+          <p class="impact__note" id="rescuedNote">—</p>
+        </div>
+        <div class="impact__card">
+          <div class="impact__value" id="overrated">—</div>
+          <div class="impact__title">AIは高評価、人事はご不合格</div>
+          <p class="impact__note" id="overratedNote">—</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 評価軸の効き目 ============ -->
+    <div class="card sec">
+      <div class="sec__head">
+        <h2>評価軸ごとの判別力</h2>
+      </div>
+      <p class="hint" style="padding:14px 16px 0;margin:0">
+        合格とされた方と不合格とされた方で、点数に差が出ているかを見ています。
+        差が小さい観点は、合否の判断に寄与していません。
+        <strong>「効いていません」と出た観点は、<a href="content.html">コンテンツ編集</a>で
+        観点の説明を書き直してください。</strong>その文章が、そのままAIへの指示になります。
+      </p>
+      <table class="axis" style="margin-top:10px">
+        <thead>
+          <tr>
+            <th>評価軸</th>
+            <th class="num">合格者の平均</th>
+            <th class="num">不合格者の平均</th>
+            <th class="num">差</th>
+            <th>判別力</th>
+          </tr>
+        </thead>
+        <tbody id="axisTable"></tbody>
+      </table>
+    </div>
+
+    <!-- ============ 答えられなかった質問 ============ -->
+    <div class="card sec">
+      <div class="sec__head">
+        <h2>答えられなかった質問</h2>
+        <span class="count"><span id="missCount">—</span></span>
+      </div>
+      <p class="hint" style="padding:14px 16px 0;margin:0">
+        求職者から聞かれたものの、ナレッジに情報が無く「採用担当へお繋ぎします」と返した質問です。
+        よく聞かれているものから順に並んでいます。
+        <strong>「ナレッジに追加」を押すと、その質問を持ったまま編集画面へ移動します。</strong>
+      </p>
+      <div id="missList" style="margin-top:8px"></div>
+    </div>
+
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">AI採用システム ／ 振り返りは採用ご担当者専用の画面です。</div>
+</footer>
+
+<script src="assets/js/knowledge.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="assets/js/interview-data.js"></script>
+<script src="assets/js/content.js"></script>
+<script src="assets/js/insights.js"></script>
+</body>
+</html>

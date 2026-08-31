@@ -236,6 +236,26 @@ function searchKnowledge(query) {
     .sort((a, b) => b.score - a.score);
 }
 
+/* ------------------------------------------------------------
+   Stage 6: 答えられなかった質問の記録
+   ------------------------------------------------------------
+   記録するのは質問文だけ。誰が入力したかは送らない。
+   サーバーが無い（デモ）場合は何もしない。
+   ------------------------------------------------------------ */
+function reportMiss(question, best) {
+  if (!Sessions.remote) return;
+  fetch(`${CONFIG.API_BASE}/insights`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      action: 'miss',
+      question: String(question).slice(0, 200),
+      bestScore: best ? best.score : 0,
+      bestId: best ? best.entry.id : null,
+    }),
+  }).catch(() => { /* 記録できなくても会話は続ける */ });
+}
+
 /* ============================================================
    3. チャット
    ============================================================ */
@@ -286,6 +306,10 @@ const Chat = (() => {
     const best = ranked[0];
 
     if (!best || best.score < MATCH_THRESHOLD) {
+      // Stage 6: 答えられなかった質問を残す。ナレッジの追加候補になる。
+      // その場で記録しないと後から復元できないので、ここで送る。
+      reportMiss(query, best);
+
       const picks = Content.knowledge.slice(0, 3).map((e) => e.q);
       return {
         text: '申し訳ございません、その内容は私の手元の資料では確認できませんでした。\n'

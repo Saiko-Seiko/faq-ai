@@ -196,6 +196,19 @@ const Editor = (() => {
       alert(err.message);
       return;
     }
+    /* 振り返り画面の「ナレッジに追加」から来た場合、
+       その質問を入れた空の項目を用意しておく。回答を書くだけで済むように。 */
+    const pending = sessionStorage.getItem('faqai.newKnowledgeQuestion');
+    if (pending) {
+      sessionStorage.removeItem('faqai.newKnowledgeQuestion');
+      data.knowledge.unshift({
+        id: `k${Date.now()}`, category: 'その他', q: pending, keywords: [], a: '', published: true,
+      });
+      $('fromInsight').hidden = false;
+      $('fromInsight').textContent = `「${pending}」を先頭に追加しました。回答を書いて保存してください。`;
+      markDirty();
+    }
+
     paintAll();
 
     // どこか触ったら保存バーを出す

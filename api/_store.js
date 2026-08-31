@@ -373,10 +373,18 @@ async function purgeExpired() {
     RETURNING id
   `;
 
+  // Stage 6: 答えられなかった質問。閲覧者が自由に入力した文章なので、
+  // 面接記録と同じ期間で消す（個人情報が紛れ込む可能性があるため）。
+  let misses = 0;
+  try {
+    misses = await require('./_insights.js').purgeOldMisses(RETENTION.session);
+  } catch (_) { /* テーブル未作成でも他の削除は続ける */ }
+
   const result = {
     sessions: sessions.length,
     candidates: candidates.length,
     auditEntries: audits.length,
+    chatMisses: misses,
   };
 
   // 何を消したかは件数だけ記録する（個人を特定できる情報は書かない）

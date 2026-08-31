@@ -271,7 +271,7 @@ const Dashboard = (() => {
         + '記録はデータベースに保存され、他の担当者の画面にも反映されます。';
       $('resetBtn').hidden = true;
       // 候補者管理とコンテンツ編集は、データベースがある場合のみ意味を持つ
-      ['candLink', 'contentLink'].forEach((id) => {
+      ['candLink', 'contentLink', 'insightLink'].forEach((id) => {
         const link = $(id);
         if (link) link.hidden = false;
       });
