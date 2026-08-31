@@ -230,6 +230,91 @@ const Dashboard = (() => {
     }
   }
 
+  /* ---------- 削除請求への対応 ----------
+     サーバー側の窓口（/api/privacy）は Stage 4 から在ったが、
+     届いた請求を人事が見る画面が無かった。
+     応募者には「担当者が確認のうえ対応いたします」と表示している以上、
+     受け取る側の画面が無いままでは、その約束が果たせない。
+
+     対応済みにすると、請求に含まれる氏名・連絡先はサーバー側で消去される。
+     消えたあとでは誰の請求か分からなくなるので、
+     「記録の削除 → 請求を閉じる」の順序を画面で明示する。 */
+  let requests = [];
+
+  async function loadRequests() {
+    if (!Sessions.remote) return;
+    try {
+      const res = await fetch(`${CONFIG.API_BASE}/privacy?requests=1`, { cache: 'no-store' });
+      if (!res.ok) return; // 権限が無い場合など。普段の画面を妨げない
+      const data = await res.json();
+      requests = (data.requests || []).filter((r) => r.status === 'open');
+    } catch (_) {
+      requests = []; // 請求の取得に失敗しても、選考の作業は続けられるようにする
+    }
+  }
+
+  function paintRequests() {
+    const panel = $('reqPanel');
+    if (!panel) return;
+
+    if (!requests.length) { panel.hidden = true; return; }
+    panel.hidden = false;
+    $('reqCount').textContent = requests.length;
+
+    const canClose = Auth.can('reviewer');
+
+    $('reqList').innerHTML = requests.map((r) => `
+      <div class="edit-item" data-req="${r.id}"
+           style="padding:12px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px">
+        <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap">
+          <strong style="font-size:13.5px">${escapeHtml(r.name || '（お名前の記載なし）')}</strong>
+          <span class="hint">${escapeHtml(r.email || '')}</span>
+          <span style="flex:1"></span>
+          <span class="hint">${formatDateTime(r.requestedAt)}</span>
+        </div>
+        ${r.message ? `<p style="margin:8px 0 0;font-size:13px;white-space:pre-wrap">${escapeHtml(r.message)}</p>` : ''}
+        <p class="hint" style="margin:8px 0 0">
+          該当する記録を左の一覧から探し、「この記録を完全に削除」で消してから、下のボタンを押してください。
+        </p>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn--sm" type="button" data-reqdone="${r.id}" ${canClose ? '' : 'disabled'}>対応しました</button>
+          <button class="btn btn--ghost btn--sm" type="button" data-reqskip="${r.id}" ${canClose ? '' : 'disabled'}>対象外にする</button>
+        </div>
+      </div>`).join('');
+
+    if (!canClose) {
+      $('reqList').insertAdjacentHTML('beforeend',
+        '<p class="hint" style="margin:0">閲覧のみの権限のため、対応の記録はできません。</p>');
+    }
+  }
+
+  async function closeRequest(id, status) {
+    const label = status === 'done' ? '対応済み' : '対象外';
+    const confirmText = status === 'done'
+      ? 'この請求を対応済みにします。\n\n記録の削除はお済みですか？\n'
+        + '対応済みにすると、請求に含まれるお名前・連絡先は消去され、\n'
+        + 'あとから「どなたの請求だったか」を確認できなくなります。'
+      : 'この請求を対象外にします。\n\n記録は削除されません。';
+    if (!confirm(confirmText)) return;
+
+    const note = prompt(`${label}にする理由・対応内容をご記入ください（記録に残ります）`, '') ;
+    if (note === null) return;
+
+    try {
+      const res = await fetch(`${CONFIG.API_BASE}/privacy`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, status, note }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `保存できませんでした (${res.status})`);
+      requests = requests.filter((r) => r.id !== id);
+      paintRequests();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
   async function saveMemo() {
     const rec = current();
     if (!rec) return;
@@ -308,11 +393,27 @@ const Dashboard = (() => {
       $('list').innerHTML = `<p class="hint" style="padding:14px">読み込めませんでした。<br>${escapeHtml(err.message)}</p>`;
     }
 
+    await loadRequests();
+
     selectedId = records.length ? records[0].id : null;
     paintSource();
     paintList();
     paintDetail();
     paintPermissions();
+    paintRequests();
+
+    $('reqToggle').addEventListener('click', () => {
+      const list = $('reqList');
+      list.hidden = !list.hidden;
+      $('reqToggle').textContent = list.hidden ? '内容を見る' : '閉じる';
+    });
+
+    $('reqList').addEventListener('click', (e) => {
+      const done = e.target.closest('[data-reqdone]');
+      if (done) { closeRequest(Number(done.dataset.reqdone), 'done'); return; }
+      const skip = e.target.closest('[data-reqskip]');
+      if (skip) closeRequest(Number(skip.dataset.reqskip), 'rejected');
+    });
 
     $('list').addEventListener('click', (e) => {
       const row = e.target.closest('[data-id]');

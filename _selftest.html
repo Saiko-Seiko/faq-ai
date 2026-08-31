@@ -258,6 +258,13 @@ async function syntaxCheck(paths) {
       d.querySelector('[data-hint="dashboard"]').textContent.includes('鈴木'));
     check('dashboard: 参考値である旨の明記',
       d.body.textContent.includes('合否の決定ではありません'));
+
+    /* 削除請求のパネルは、データベース接続時にだけ出す。
+       デモで「未対応の削除請求 0件」が出ると、実在しない請求があるように見える。 */
+    check('dashboard: デモでは削除請求のパネルを出さない',
+      d.querySelector('#reqPanel') && d.querySelector('#reqPanel').hidden);
+    check('dashboard: 削除請求の受け皿は用意されている',
+      !!d.querySelector('#reqList') && !!d.querySelector('#reqToggle'));
   }
 
   finishReport();

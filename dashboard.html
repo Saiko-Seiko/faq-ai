@@ -182,6 +182,21 @@
     <button class="hint-bar__close" type="button">閉じる</button>
   </div>
 
+  <!-- 削除請求。応募者の権利に関わるので、他のどの案内よりも上に出す。
+       0件のときは何も表示しない（普段の画面を圧迫しない）。 -->
+  <section class="card card__pad" id="reqPanel" hidden style="margin:16px 0;border-color:var(--warn,#c47f17)">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span class="badge badge--warn">未対応の削除請求 <b id="reqCount">0</b>件</span>
+      <span style="flex:1"></span>
+      <button class="btn btn--ghost btn--sm" type="button" id="reqToggle">内容を見る</button>
+    </div>
+    <p class="hint" style="margin:8px 0 0">
+      応募者ご本人から、記録の削除をご請求いただいています。
+      <strong>ご本人であることを確認したうえで</strong>、該当の記録を削除してください。
+    </p>
+    <div id="reqList" hidden style="margin-top:12px"></div>
+  </section>
+
   <div class="note note--accent" style="margin:16px 0">
     <strong>スコアはAIによる一次スクリーニングの参考値であり、合否の決定ではありません。</strong>
     AIが行うのは回答内容の整理とスコア化までです。合格・不合格の判断は、
