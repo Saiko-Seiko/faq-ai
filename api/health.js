@@ -16,6 +16,6 @@ module.exports = function handler(req, res) {
     model: MODEL,
     // Stage 1: 記録の保存先。'db' なら人事画面はサーバーから読む
     storage: store.isEnabled() ? 'db' : 'local',
-    hrAuthRequired: !!process.env.HR_ACCESS_TOKEN,
+    // Stage 3: 認証の要否は /api/auth が返す（ここでは保存先だけを伝える）
   });
 };

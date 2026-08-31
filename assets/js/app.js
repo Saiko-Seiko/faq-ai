@@ -92,7 +92,6 @@ const Sessions = {
   async fetchAll() {
     if (!Sessions.remote) return Sessions.all();
     const res = await fetch(`${CONFIG.API_BASE}/sessions`, {
-      headers: HrKey.headers(),
       cache: 'no-store',
     });
     if (res.status === 401) throw Object.assign(new Error('鍵が正しくありません。'), { code: 401 });
@@ -106,7 +105,7 @@ const Sessions = {
     if (!Sessions.remote) return null;
     const res = await fetch(`${CONFIG.API_BASE}/sessions`, {
       method: 'PATCH',
-      headers: { 'content-type': 'application/json', ...HrKey.headers() },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ id, decision, memo }),
     });
     if (!res.ok) {
@@ -118,18 +117,138 @@ const Sessions = {
 };
 
 /* ------------------------------------------------------------
-   人事用の鍵（Stage 1 の暫定措置）
+   担当者のログイン（Stage 3）
    ------------------------------------------------------------
-   応募者の回答は個人情報なので、誰でも読める状態にはできない。
-   Stage 3 で担当者ごとのログインに置き換える。
+   Stage 1 の共有鍵を廃止し、担当者ごとのログインに置き換えた。
+   認証はサーバーが発行する HttpOnly Cookie で行うため、
+   画面側は鍵を保持しない（localStorage にも置かない）。
    ------------------------------------------------------------ */
-const HrKey = {
-  required: false,
-  get() { return Store.get('faqai.hrkey', '') || ''; },
-  set(v) { if (v) Store.set('faqai.hrkey', v); else Store.remove('faqai.hrkey'); },
-  headers() {
-    const k = HrKey.get();
-    return k ? { 'x-hr-token': k } : {};
+const Auth = {
+  required: false,   // データベース運用ならログインが要る
+  user: null,        // { id, name, email, role }
+  needsBootstrap: false,
+
+  /** 権限の判定。viewer < reviewer < admin */
+  can(minimum) {
+    if (!Auth.required) return true; // デモ運用では制限しない
+    if (!Auth.user) return false;
+    const rank = { viewer: 1, reviewer: 2, admin: 3 };
+    return rank[Auth.user.role] >= rank[minimum];
+  },
+
+  async refresh() {
+    try {
+      const res = await fetch(`${CONFIG.API_BASE}/auth`, { cache: 'no-store' });
+      const info = await res.json();
+      Auth.required = !!info.authRequired;
+      Auth.user = info.user || null;
+      Auth.needsBootstrap = !!info.needsBootstrap;
+    } catch (_) {
+      Auth.required = false;
+      Auth.user = null;
+    }
+    return Auth.user;
+  },
+
+  async login(email, key) {
+    const res = await fetch(`${CONFIG.API_BASE}/auth`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, key }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'ログインできませんでした。');
+    Auth.user = data.user;
+    return data.user;
+  },
+
+  async logout() {
+    await fetch(`${CONFIG.API_BASE}/auth`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'logout' }),
+    });
+    Auth.user = null;
+    location.reload();
+  },
+
+  /* ------------------------------------------------------------
+     ログインが必要な画面の入口。
+     ログイン済みなら即座に通し、そうでなければログイン画面を出して待つ。
+     ------------------------------------------------------------ */
+  async ensure() {
+    await Auth.refresh();
+    if (!Auth.required || Auth.user) return Auth.user;
+
+    return new Promise((resolve) => {
+      Auth.mountLogin(resolve);
+    });
+  },
+
+  mountLogin(onDone) {
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="modal" id="loginModal">
+        <form class="modal__box stack" id="loginForm">
+          <span class="badge badge--accent">担当者ログイン</span>
+          <h2 style="font-size:18px">この画面は採用ご担当者専用です</h2>
+          <p class="hint" style="margin:0">
+            応募者の個人情報を扱うため、ご本人の確認をお願いしています。
+          </p>
+
+          <label class="field">
+            <span class="field__label">メールアドレス</span>
+            <input class="input" id="loginEmail" type="email" required autocomplete="username">
+          </label>
+
+          <label class="field">
+            <span class="field__label">アクセスキー</span>
+            <input class="input" id="loginKey" type="password" required autocomplete="current-password">
+            <span class="hint">管理者から発行されたキーをご入力ください。</span>
+          </label>
+
+          <p class="note note--warn" id="loginError" hidden style="margin:0"></p>
+          <button class="btn btn--block" type="submit" id="loginBtn">ログイン</button>
+          <p class="hint center" style="margin:0">
+            キーが分からない場合は、管理者に再発行をご依頼ください。
+          </p>
+        </form>
+      </div>
+    `);
+
+    const form = document.getElementById('loginForm');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('loginBtn');
+      const err = document.getElementById('loginError');
+      btn.disabled = true;
+      err.hidden = true;
+
+      try {
+        const user = await Auth.login(
+          document.getElementById('loginEmail').value.trim(),
+          document.getElementById('loginKey').value.trim(),
+        );
+        document.getElementById('loginModal').remove();
+        onDone(user);
+      } catch (e2) {
+        err.textContent = e2.message;
+        err.hidden = false;
+        btn.disabled = false;
+      }
+    });
+  },
+
+  /* ヘッダーに、いま誰でログインしているかを出す */
+  paintWho() {
+    const host = document.getElementById('whoami');
+    if (!host || !Auth.user) return;
+    const roleLabel = { viewer: '閲覧のみ', reviewer: '選考担当', admin: '管理者' };
+    host.innerHTML = `
+      <span class="badge">${escapeHtml(Auth.user.name)}・${roleLabel[Auth.user.role] || Auth.user.role}</span>
+      <button class="btn btn--ghost btn--sm" type="button" id="logoutBtn">ログアウト</button>
+    `;
+    host.hidden = false;
+    document.getElementById('logoutBtn').addEventListener('click', () => Auth.logout());
   },
 };
 
@@ -167,7 +286,6 @@ const Mode = {
       Mode.model = info.model || '';
       // Stage 1: 保存先がサーバーにあるかどうか
       Sessions.remote = info.storage === 'db';
-      HrKey.required = !!info.hrAuthRequired;
     } catch (_) {
       // file:// で開いた場合や、未デプロイの場合はここに来る。デモモードで動かす。
       Mode.serverReady = false;

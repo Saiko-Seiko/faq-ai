@@ -285,3 +285,7 @@ h1, h2, h3, h4 { line-height: 1.4; margin: 0; font-weight: 700; letter-spacing: 
   margin-top: 12px; letter-spacing: .02em;
 }
 .consent__list dd { margin: 3px 0 0; line-height: 1.8; }
+
+/* ---------- ログイン中の担当者表示 ---------- */
+.site-who { display: inline-flex; align-items: center; gap: 7px; }
+.site-who[hidden] { display: none !important; }

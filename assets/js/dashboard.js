@@ -215,7 +215,6 @@ const Dashboard = (() => {
     try {
       const res = await fetch(`${CONFIG.API_BASE}/privacy?id=${encodeURIComponent(rec.id)}`, {
         method: 'DELETE',
-        headers: HrKey.headers(),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -271,51 +270,46 @@ const Dashboard = (() => {
       el.innerHTML = '<span class="badge badge--ok">サーバー保存</span> '
         + '記録はデータベースに保存され、他の担当者の画面にも反映されます。';
       $('resetBtn').hidden = true;
-      // 候補者管理と削除はデータベースがある場合のみ意味を持つ
+      // 候補者管理はデータベースがある場合のみ意味を持つ
       const link = $('candLink');
       if (link) link.hidden = false;
-      $('purgeBtn').hidden = false;
     } else {
       el.innerHTML = '<span class="badge">この端末のみ</span> '
         + 'デモ表示です。記録はご覧の端末内にのみ保存され、他の方には共有されません。';
     }
   }
 
-  /* 鍵が必要なのに持っていない／間違っている場合の入力 */
-  async function askHrKey(message) {
-    const entered = prompt(`${message}\n\n人事用の鍵を入力してください。`, HrKey.get() || '');
-    if (entered === null) return false;
-    HrKey.set(entered.trim());
-    return true;
+  /* 権限に応じて操作を出し分ける（閲覧のみの担当者には押させない） */
+  function paintPermissions() {
+    const canDecide = Auth.can('reviewer');
+    document.querySelectorAll('[data-decision]').forEach((b) => { b.disabled = !canDecide; });
+    $('memo').disabled = !canDecide;
+    $('memoSave').disabled = !canDecide;
+    $('purgeBtn').hidden = !(Sessions.remote && Auth.can('admin'));
+
+    if (Auth.required && !canDecide) {
+      $('decisionState').insertAdjacentHTML('afterend',
+        '<p class="hint" style="margin:6px 0 0">閲覧のみの権限のため、合否の記録はできません。</p>');
+    }
   }
 
   /* ---------- 初期化 ---------- */
   async function init() {
-    await Mode.ready(); // 保存先がサーバーかどうかを先に確かめる
+    await Mode.ready();      // 保存先がサーバーかどうか
+    await Auth.ensure();     // サーバー保存ならログインを求める
+    Auth.paintWho();
 
-    // サーバー保存の場合、鍵が通るまで読み込みを繰り返す
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        await load();
-        break;
-      } catch (err) {
-        if (err.code === 401 || !HrKey.get()) {
-          const retry = await askHrKey(
-            attempt === 0
-              ? 'この画面には応募者の個人情報が含まれます。'
-              : '鍵が正しくありませんでした。',
-          );
-          if (retry) continue;
-        }
-        $('list').innerHTML = `<p class="hint" style="padding:14px">読み込めませんでした。<br>${escapeHtml(err.message)}</p>`;
-        break;
-      }
+    try {
+      await load();
+    } catch (err) {
+      $('list').innerHTML = `<p class="hint" style="padding:14px">読み込めませんでした。<br>${escapeHtml(err.message)}</p>`;
     }
 
     selectedId = records.length ? records[0].id : null;
     paintSource();
     paintList();
     paintDetail();
+    paintPermissions();
 
     $('list').addEventListener('click', (e) => {
       const row = e.target.closest('[data-id]');

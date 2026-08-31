@@ -120,7 +120,6 @@ const Candidates = (() => {
   /* ---------- 読み込み ---------- */
   async function load() {
     const res = await fetch(`${CONFIG.API_BASE}/candidates`, {
-      headers: HrKey.headers(),
       cache: 'no-store',
     });
     if (res.status === 401) throw Object.assign(new Error('鍵が正しくありません。'), { code: 401 });
@@ -131,7 +130,7 @@ const Candidates = (() => {
   async function send(method, payload) {
     const res = await fetch(`${CONFIG.API_BASE}/candidates`, {
       method,
-      headers: { 'content-type': 'application/json', ...HrKey.headers() },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
@@ -231,27 +230,24 @@ const Candidates = (() => {
       return;
     }
 
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        await load();
-        break;
-      } catch (err) {
-        if (err.code === 401 || !HrKey.get()) {
-          const entered = prompt(
-            attempt === 0
-              ? 'この画面には応募者の個人情報が含まれます。\n\n人事用の鍵を入力してください。'
-              : '鍵が正しくありませんでした。\n\n人事用の鍵を入力してください。',
-            HrKey.get() || '',
-          );
-          if (entered !== null) { HrKey.set(entered.trim()); continue; }
-        }
-        $('list').innerHTML = `<p class="hint" style="padding:16px">読み込めませんでした。<br>${escapeHtml(err.message)}</p>`;
-        break;
-      }
+    await Auth.ensure();
+    Auth.paintWho();
+
+    try {
+      await load();
+    } catch (err) {
+      $('list').innerHTML = `<p class="hint" style="padding:16px">読み込めませんでした。<br>${escapeHtml(err.message)}</p>`;
     }
 
     paint();
-    $('createForm').addEventListener('submit', create);
+
+    // 閲覧のみの担当者は、候補者の登録・招待ができない
+    if (!Auth.can('reviewer')) {
+      $('createForm').hidden = true;
+      $('createLocked').hidden = false;
+    } else {
+      $('createForm').addEventListener('submit', create);
+    }
     $('list').addEventListener('click', onAction);
   }
 

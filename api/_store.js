@@ -66,9 +66,18 @@ function toRecord(row) {
 async function audit(action, target, detail = {}, actor = 'system') {
   const q = db();
   if (!q) return;
+
+  // actor は文字列（'system' など）でも、担当者オブジェクトでも受ける。
+  // Stage 3 以降は担当者が渡ってくるので、誰の操作かを列に残す。
+  const isUser = actor && typeof actor === 'object';
+  const label = isUser ? (actor.email || actor.id) : String(actor);
+  const actorId = isUser ? actor.id : null;
+  const actorEmail = isUser ? actor.email : null;
+
   try {
-    await q`INSERT INTO audit_log (actor, action, target, detail)
-            VALUES (${actor}, ${action}, ${target}, ${JSON.stringify(detail)}::jsonb)`;
+    await q`INSERT INTO audit_log (actor, actor_id, actor_email, action, target, detail)
+            VALUES (${label}, ${actorId}, ${actorEmail}, ${action}, ${target},
+                    ${JSON.stringify(detail)}::jsonb)`;
   } catch (_) { /* 記録できなくても処理は続ける */ }
 }
 
@@ -135,11 +144,16 @@ async function decideSession(id, { decision, memo, actor = 'hr' }) {
   const valid = ['pass', 'hold', 'reject', null];
   if (!valid.includes(decision)) throw Object.assign(new Error('不正な判断値です。'), { status: 400 });
 
+  // actor は担当者オブジェクト（Stage 3）か文字列。表示用の名前を取り出す。
+  const actorLabel = (actor && typeof actor === 'object')
+    ? (actor.name ? `${actor.name}（${actor.email}）` : actor.email)
+    : String(actor);
+
   const rows = await q`
     UPDATE interview_sessions SET
       human_decision = ${decision},
       human_memo     = ${memo || ''},
-      decided_by     = ${decision === null ? null : actor},
+      decided_by     = ${decision === null ? null : actorLabel},
       decided_at     = ${decision === null ? null : new Date().toISOString()}
     WHERE id = ${id}
     RETURNING *
@@ -196,6 +210,12 @@ async function listCandidates(limit = 300) {
   return rows.map(toCandidate);
 }
 
+/* 担当者オブジェクトでも文字列でも受けられるようにする（列は TEXT のため） */
+function actorLabel(actor) {
+  if (actor && typeof actor === 'object') return actor.email || actor.id || 'unknown';
+  return String(actor);
+}
+
 async function createCandidate({ name, role, email, note, expiresInDays = 14, actor = 'hr' }) {
   const q = db();
   if (!q) return null;
@@ -205,7 +225,7 @@ async function createCandidate({ name, role, email, note, expiresInDays = 14, ac
 
   const rows = await q`
     INSERT INTO candidates (token, name, role, email, note, applied_on, expires_at, created_by)
-    VALUES (${token}, ${name}, ${role}, ${email || null}, ${note || ''}, CURRENT_DATE, ${expiresAt}, ${actor})
+    VALUES (${token}, ${name}, ${role}, ${email || null}, ${note || ''}, CURRENT_DATE, ${expiresAt}, ${actorLabel(actor)})
     RETURNING *
   `;
   await audit('candidate.create', token, { name, role, expiresAt }, actor);
@@ -403,7 +423,7 @@ async function closeDeletionRequest(id, { status = 'done', note = '', actor = 'h
     UPDATE deletion_requests SET
       status     = ${status},
       handled_at = now(),
-      handled_by = ${actor},
+      handled_by = ${actorLabel(actor)},
       note       = ${note},
       name       = NULL,
       email      = NULL,
@@ -415,8 +435,100 @@ async function closeDeletionRequest(id, { status = 'done', note = '', actor = 'h
   return rows.length ? rows[0] : null;
 }
 
+/* ============================================================
+   Stage 3: 担当者
+   ============================================================ */
+
+function toUser(row) {
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    role: row.role,
+    createdAt: row.created_at,
+    disabledAt: row.disabled_at,
+    lastLoginAt: row.last_login_at,
+  };
+}
+
+async function countUsers() {
+  const q = db();
+  if (!q) return 0;
+  const rows = await q`SELECT count(*)::int AS n FROM users WHERE disabled_at IS NULL`;
+  return rows[0] ? rows[0].n : 0;
+}
+
+async function getUser(id) {
+  const q = db();
+  if (!q) return null;
+  const rows = await q`SELECT * FROM users WHERE id = ${id} LIMIT 1`;
+  return rows.length ? toUser(rows[0]) : null;
+}
+
+/* ログイン。メールとキーの両方が合ったときだけ担当者を返す。 */
+async function authenticate(email, keyHash) {
+  const q = db();
+  if (!q) return null;
+  const rows = await q`
+    SELECT * FROM users
+    WHERE lower(email) = lower(${email}) AND key_hash = ${keyHash} AND disabled_at IS NULL
+    LIMIT 1
+  `;
+  if (!rows.length) return null;
+  await q`UPDATE users SET last_login_at = now() WHERE id = ${rows[0].id}`;
+  return toUser(rows[0]);
+}
+
+async function listUsers() {
+  const q = db();
+  if (!q) return [];
+  const rows = await q`SELECT * FROM users ORDER BY disabled_at NULLS FIRST, created_at ASC`;
+  return rows.map(toUser);
+}
+
+async function createUser({ email, name, role, keyHash, actor = 'system' }) {
+  const q = db();
+  if (!q) return null;
+  const id = crypto.randomBytes(12).toString('base64url');
+  const rows = await q`
+    INSERT INTO users (id, email, name, role, key_hash, created_by)
+    VALUES (${id}, ${email}, ${name}, ${role}, ${keyHash}, ${actor})
+    RETURNING *
+  `;
+  return toUser(rows[0]);
+}
+
+async function updateUser(id, { role, disabled, keyHash }) {
+  const q = db();
+  if (!q) return null;
+  if (role) await q`UPDATE users SET role = ${role} WHERE id = ${id}`;
+  if (disabled === true) await q`UPDATE users SET disabled_at = now() WHERE id = ${id}`;
+  if (disabled === false) await q`UPDATE users SET disabled_at = NULL WHERE id = ${id}`;
+  if (keyHash) await q`UPDATE users SET key_hash = ${keyHash} WHERE id = ${id}`;
+  return getUser(id);
+}
+
+/* 操作ログ（担当者つき）。誰が何をしたかを追えるようにする。 */
+async function listAudit({ limit = 200, target = null } = {}) {
+  const q = db();
+  if (!q) return [];
+  const rows = target
+    ? await q`SELECT * FROM audit_log WHERE target = ${target} ORDER BY at DESC LIMIT ${limit}`
+    : await q`SELECT * FROM audit_log ORDER BY at DESC LIMIT ${limit}`;
+  return rows.map((r) => ({
+    id: r.id,
+    at: r.at,
+    action: r.action,
+    target: r.target,
+    actor: r.actor,
+    actorEmail: r.actor_email,
+    detail: r.detail,
+  }));
+}
+
 module.exports = {
   isEnabled, saveSession, listSessions, decideSession, audit,
+  countUsers, getUser, authenticate, listUsers, createUser, updateUser, listAudit,
   listCandidates, createCandidate, getCandidate,
   markStarted, markUsed, updateCandidate, statusOf,
   retentionPolicy, purgeCandidate, purgeSession, purgeExpired,

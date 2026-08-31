@@ -13,26 +13,10 @@
    （本人確認をせずに削除を実行すると、第三者が他人のデータを消せてしまう）
    ============================================================ */
 
-const crypto = require('crypto');
+const auth = require('./_auth.js');
 const store = require('./_store.js');
 
 const MAX_TEXT = 2000;
-
-function checkHr(req, res) {
-  const expected = process.env.HR_ACCESS_TOKEN;
-  if (!expected) {
-    res.status(503).json({ error: '人事用の鍵が未設定です。' });
-    return false;
-  }
-  const given = String(req.headers['x-hr-token'] || '');
-  const a = Buffer.from(given);
-  const b = Buffer.from(expected);
-  if (!(a.length === b.length && crypto.timingSafeEqual(a, b))) {
-    res.status(401).json({ error: '人事用の鍵が正しくありません。' });
-    return false;
-  }
-  return true;
-}
 
 function readBody(req) {
   if (typeof req.body === 'string') {
@@ -90,13 +74,15 @@ module.exports = async function handler(req, res) {
     /* ---------- ここから人事のみ ---------- */
 
     if (req.method === 'GET' && q.requests) {
-      if (!checkHr(req, res)) return;
+      const me = await auth.requireRole(req, res, 'viewer');
+      if (!me) return;
       res.status(200).json({ requests: await store.listDeletionRequests() });
       return;
     }
 
     if (req.method === 'PATCH') {
-      if (!checkHr(req, res)) return;
+      const me = await auth.requireRole(req, res, 'reviewer');
+      if (!me) return;
       if (!body.id) {
         res.status(400).json({ error: '対象が指定されていません。' });
         return;
@@ -104,22 +90,25 @@ module.exports = async function handler(req, res) {
       const result = await store.closeDeletionRequest(Number(body.id), {
         status: body.status === 'rejected' ? 'rejected' : 'done',
         note: String(body.note || '').slice(0, MAX_TEXT),
+        actor: me,
       });
       res.status(200).json({ ok: true, request: result });
       return;
     }
 
-    /* ---------- 完全削除 ---------- */
+    /* ---------- 完全削除 ----------
+       取り消せない操作なので admin に限定する。 */
     if (req.method === 'DELETE') {
-      if (!checkHr(req, res)) return;
+      const me = await auth.requireRole(req, res, 'admin');
+      if (!me) return;
 
       if (q.token) {
-        const result = await store.purgeCandidate(String(q.token));
+        const result = await store.purgeCandidate(String(q.token), me);
         res.status(200).json({ ok: true, deleted: result });
         return;
       }
       if (q.id) {
-        await store.purgeSession(String(q.id));
+        await store.purgeSession(String(q.id), me);
         res.status(200).json({ ok: true });
         return;
       }

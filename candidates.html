@@ -58,8 +58,10 @@
     <nav class="site-nav">
       <a href="dashboard.html">選考状況</a>
       <a href="candidates.html" aria-current="page">候補者管理</a>
+      <a href="team.html">担当者管理</a>
       <a href="briefing.html">会社説明会</a>
     </nav>
+    <span id="whoami" class="site-who" hidden></span>
     <span data-settings-slot></span>
   </div>
 </header>
@@ -131,6 +133,14 @@
         <strong>受験が完了すると、そのURLは開けなくなります。</strong>
       </div>
     </form>
+
+    <!-- 権限が足りない場合 -->
+    <div class="card card__pad" id="createLocked" hidden>
+      <span class="badge">閲覧のみ</span>
+      <p class="muted" style="margin:10px 0 0;font-size:13.5px">
+        候補者の登録は、選考担当以上の権限が必要です。管理者にご相談ください。
+      </p>
+    </div>
 
     <!-- ============ 一覧 ============ -->
     <div class="card">

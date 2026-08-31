@@ -66,7 +66,7 @@ Project Settings → Environment Variables
 - [ ] ライブモードで質問 → 回答が返る
 - [ ] `/interview?token=demo-tanaka` — 面接が最後まで進む
 - [ ] `/dashboard` — 候補者が並び、合否ボタンが押せる
-- [ ] `/_selftest.html` — 59項目すべて OK になる
+- [ ] `/_selftest.html` — 63項目すべて OK になる
 
 `cleanUrls` を有効にしているので、URLは `.html` なしで届く
 （`/briefing`、`/interview?token=...`）。`.html` 付きでも自動で転送される。
@@ -298,3 +298,34 @@ psql "$DATABASE_URL" -f db/003_privacy.sql
 - [ ] `/api/cleanup` を手で叩く（`CRON_SECRET` 設定時は Bearer 付き）
       → `{"ok":true,"deleted":{...}}` が返る
 - [ ] Vercel の Cron ジョブ一覧に `/api/cleanup` が登録されている
+
+### Stage 3 のマイグレーションと初期設定
+
+```bash
+psql "$DATABASE_URL" -f db/004_users.sql
+```
+
+環境変数:
+
+| Name | 必須 | 意味 |
+|---|---|---|
+| `AUTH_SECRET` | 推奨 | セッションCookieの署名鍵。長いランダム文字列。未設定なら他の秘密値から導出する |
+| `HR_ACCESS_TOKEN` | 初期設定のみ | **最初の管理者を登録したら削除すること** |
+
+初期設定の手順:
+
+1. `HR_ACCESS_TOKEN` を設定した状態でデプロイ
+2. `/team` を開く → 担当者が0人なので初期設定の入口が出る
+3. 自分の氏名とメールアドレスで**最初の管理者**を作る
+4. 表示されたアクセスキーを控える（この1回しか表示されない）
+5. 同僚を追加し、それぞれにキーを渡す
+6. **`HR_ACCESS_TOKEN` を環境変数から削除して再デプロイ**
+
+確認：
+
+- [ ] `/dashboard` を開くとログイン画面が出る
+- [ ] 正しいメールとキーでログインできる
+- [ ] 閲覧のみの担当者では合否ボタンが押せない
+- [ ] 合否を押したあと `/team` の操作ログに、その担当者の名前で記録が残る
+- [ ] 停止した担当者は、ログイン済みでも次の操作で弾かれる
+- [ ] `HR_ACCESS_TOKEN` を消したあともログインできる（＝共有鍵に依存していない）

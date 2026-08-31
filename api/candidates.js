@@ -13,27 +13,10 @@
    トークンを1つ持っている応募者が全員分を読めてしまう。
    ============================================================ */
 
-const crypto = require('crypto');
+const auth = require('./_auth.js');
 const store = require('./_store.js');
 
 const MAX_TEXT = 500;
-
-function checkHr(req, res) {
-  const expected = process.env.HR_ACCESS_TOKEN;
-  if (!expected) {
-    res.status(503).json({ error: '人事用の鍵が未設定です。環境変数 HR_ACCESS_TOKEN を設定してください。' });
-    return false;
-  }
-  const given = String(req.headers['x-hr-token'] || '');
-  const a = Buffer.from(given);
-  const b = Buffer.from(expected);
-  const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
-  if (!ok) {
-    res.status(401).json({ error: '人事用の鍵が正しくありません。' });
-    return false;
-  }
-  return true;
-}
 
 function readBody(req) {
   if (typeof req.body === 'string') {
@@ -97,14 +80,17 @@ module.exports = async function handler(req, res) {
     /* ---------- ここから先は人事のみ ---------- */
 
     if (req.method === 'GET') {
-      if (!checkHr(req, res)) return;
+      const me = await auth.requireRole(req, res, 'viewer');
+      if (!me) return;
       const candidates = await store.listCandidates();
       res.status(200).json({ candidates });
       return;
     }
 
     if (req.method === 'POST') {
-      if (!checkHr(req, res)) return;
+      // 候補者の登録＝選考への招待。閲覧のみの担当者には行わせない。
+      const me = await auth.requireRole(req, res, 'reviewer');
+      if (!me) return;
 
       const name = String(body.name || '').trim().slice(0, MAX_TEXT);
       const role = String(body.role || '').trim().slice(0, MAX_TEXT);
@@ -119,13 +105,15 @@ module.exports = async function handler(req, res) {
         email: String(body.email || '').trim().slice(0, MAX_TEXT),
         note: String(body.note || '').trim().slice(0, MAX_TEXT),
         expiresInDays: Number(body.expiresInDays) || 14,
+        actor: me,
       });
       res.status(200).json({ candidate });
       return;
     }
 
     if (req.method === 'PATCH') {
-      if (!checkHr(req, res)) return;
+      const me = await auth.requireRole(req, res, 'reviewer');
+      if (!me) return;
       const token = String(body.token || '');
       if (!token) {
         res.status(400).json({ error: '対象が指定されていません。' });
@@ -135,6 +123,7 @@ module.exports = async function handler(req, res) {
         revoke: body.revoke,
         extendDays: body.extendDays,
         invited: body.invited,
+        actor: me,
       });
       if (!candidate) {
         res.status(404).json({ error: '該当する候補者がいません。' });

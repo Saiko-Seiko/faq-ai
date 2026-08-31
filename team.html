@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>担当者管理｜AI採用システム</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="assets/css/base.css">
+<style>
+  .page-head { padding: 24px 0 16px; }
+  .page-head h1 { font-size: clamp(19px, 3.2vw, 24px); }
+  .page-head p { margin: 6px 0 0; font-size: 13.5px; color: var(--text-muted); }
+
+  .layout {
+    display: grid; gap: 18px; align-items: start;
+    grid-template-columns: 320px minmax(0, 1fr);
+    padding-bottom: 56px;
+  }
+  @media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+  .member { padding: 14px 16px; border-bottom: 1px solid var(--border-soft); }
+  .member:last-child { border-bottom: 0; }
+  .member.is-off { opacity: .55; }
+  .member__head { display: flex; gap: 12px; align-items: flex-start; }
+  .member__head > div { flex: 1; min-width: 0; }
+  .member__name { font-weight: 700; font-size: 14.5px; }
+  .member__mail { font-size: 12px; color: var(--text-muted); }
+  .member__meta { margin-top: 6px; font-size: 11.5px; color: var(--text-faint); }
+  .member__actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+
+  .keybox { border: 2px solid var(--ok); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+  .keybox code {
+    display: block; margin: 10px 0; padding: 11px 13px; border-radius: 8px;
+    background: var(--surface-2); font-size: 13px; word-break: break-all;
+  }
+
+  .audit { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .audit th, .audit td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border-soft); }
+  .audit th { font-size: 11.5px; color: var(--text-faint); font-weight: 700; }
+  .audit td { font-variant-numeric: tabular-nums; }
+  .audit-wrap { max-height: 460px; overflow: auto; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header__inner">
+    <a class="brand" href="index.html"><span class="brand__mark">AI</span>AI採用システム</a>
+    <span class="site-header__spacer"></span>
+    <nav class="site-nav">
+      <a href="dashboard.html">選考状況</a>
+      <a href="candidates.html">候補者管理</a>
+      <a href="team.html" aria-current="page">担当者管理</a>
+    </nav>
+    <span id="whoami" class="site-who" hidden></span>
+    <span data-settings-slot></span>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="page-head">
+    <h1>担当者管理</h1>
+    <p>この画面を使える担当者と、その権限を管理します。</p>
+  </div>
+
+  <div class="card card__pad stack" id="needsDb" hidden style="max-width:620px">
+    <span class="badge badge--warn">データベース未接続</span>
+    <h2 style="font-size:17px">この画面はデモでは使用できません</h2>
+    <p class="muted" style="margin:0;font-size:13.5px">
+      担当者の管理には、記録を保存するデータベースが必要です。
+    </p>
+    <a class="btn btn--ghost" href="index.html">トップへ戻る</a>
+  </div>
+
+  <div class="card card__pad stack" id="needsAdmin" hidden style="max-width:620px">
+    <span class="badge badge--warn">権限が足りません</span>
+    <h2 style="font-size:17px">この画面は管理者のみが使用できます</h2>
+    <p class="muted" style="margin:0;font-size:13.5px">
+      担当者の追加・権限の変更は、管理者権限を持つ方にご依頼ください。
+    </p>
+    <a class="btn btn--ghost" href="dashboard.html">選考状況へ戻る</a>
+  </div>
+
+  <div class="layout" id="main">
+
+    <!-- ============ 追加 ============ -->
+    <div>
+      <form class="card card__pad" id="addForm">
+        <h2 style="font-size:15px;margin-bottom:14px">担当者を追加する</h2>
+        <div style="display:grid;gap:12px">
+          <label class="field">
+            <span class="field__label">氏名 <span style="color:var(--danger)">*</span></span>
+            <input class="input" id="uName" required maxlength="100" placeholder="山本 花子">
+          </label>
+          <label class="field">
+            <span class="field__label">メールアドレス <span style="color:var(--danger)">*</span></span>
+            <input class="input" id="uEmail" type="email" required maxlength="200">
+          </label>
+          <label class="field">
+            <span class="field__label">権限</span>
+            <select class="input" id="uRole">
+              <option value="viewer">閲覧のみ — 記録を読めます</option>
+              <option value="reviewer" selected>選考担当 — 合否を記録できます</option>
+              <option value="admin">管理者 — 担当者の管理とデータ削除</option>
+            </select>
+          </label>
+          <button class="btn btn--block" type="submit" id="addBtn">追加してキーを発行</button>
+        </div>
+
+        <div class="note" style="margin-top:14px">
+          発行されるアクセスキーは<strong>この場で1回だけ</strong>表示されます。
+          サーバーにはハッシュのみを保存しているため、後から確認できません。
+          忘れた場合は再発行してください。
+        </div>
+      </form>
+    </div>
+
+    <!-- ============ 一覧とログ ============ -->
+    <div>
+      <div class="card keybox" id="keyBox" hidden>
+        <strong style="font-size:14px">アクセスキーを発行しました</strong>
+        <p class="hint" style="margin:6px 0 0">
+          <span id="keyFor"></span> さんへ、安全な方法でお渡しください。この表示は一度きりです。
+        </p>
+        <code id="keyValue"></code>
+        <button class="btn btn--sm" type="button" id="keyCopy">キーをコピー</button>
+      </div>
+
+      <div class="card" style="margin-bottom:18px">
+        <div style="padding:13px 16px;border-bottom:1px solid var(--border-soft);font-size:12.5px;font-weight:700;color:var(--text-faint);letter-spacing:.05em">
+          担当者
+        </div>
+        <div id="list"></div>
+      </div>
+
+      <div class="card">
+        <div style="padding:13px 16px;border-bottom:1px solid var(--border-soft);font-size:12.5px;font-weight:700;color:var(--text-faint);letter-spacing:.05em">
+          操作ログ — 誰がいつ何をしたか
+        </div>
+        <div class="audit-wrap">
+          <table class="audit">
+            <thead>
+              <tr><th>日時</th><th>担当者</th><th>操作</th><th>対象</th></tr>
+            </thead>
+            <tbody id="audit"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">AI採用システム ／ 担当者管理は管理者専用の画面です。</div>
+</footer>
+
+<script src="assets/js/knowledge.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="assets/js/team.js"></script>
+</body>
+</html>

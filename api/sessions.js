@@ -10,54 +10,22 @@
    「他人の回答を読む」ことはできない。
    ============================================================ */
 
-const crypto = require('crypto');
 const store = require('./_store.js');
+const auth = require('./_auth.js');
 
 const MAX_ANSWERS = 20;
 const MAX_TEXT = 8000;
 
 /* ------------------------------------------------------------
-   人事用の鍵
+   Stage 3: 共有の鍵から、担当者ごとのログインへ
    ------------------------------------------------------------
-   ⚠ Stage 1 の暫定措置。全員が同じ鍵を共有するため、
-     「誰が操作したか」までは分からない（操作ログの actor は 'hr' 固定）。
-     Stage 3 で担当者ごとのログインに置き換える。
+   Stage 1 では全員が同じ鍵を使っていたため、操作ログに
+   「誰がやったか」を残せなかった。いまはセッションから担当者が分かる。
 
-   それでも今これを入れるのは、応募者の回答が個人情報であり、
-   URLを知っていれば誰でも読める状態のまま本番のデータを
-   置くわけにいかないため。
+   必要な権限:
+     viewer   … 一覧と詳細の閲覧
+     reviewer … 合否とメモの記録
    ------------------------------------------------------------ */
-function hrTokenRequired() {
-  return !!process.env.HR_ACCESS_TOKEN;
-}
-
-function checkHr(req, res) {
-  const expected = process.env.HR_ACCESS_TOKEN;
-
-  // 鍵が未設定なら、データベースも使っていない想定（デモ運用）。
-  // 本番でデータベースだけ設定して鍵を忘れると危険なので、その場合は拒否する。
-  if (!expected) {
-    if (store.isEnabled()) {
-      res.status(503).json({
-        error: '人事用の鍵が未設定です。環境変数 HR_ACCESS_TOKEN を設定してください。',
-      });
-      return false;
-    }
-    return true;
-  }
-
-  const given = String(req.headers['x-hr-token'] || '');
-  const a = Buffer.from(given);
-  const b = Buffer.from(expected);
-  // 長さが違うと timingSafeEqual は例外を投げるため、先に長さで弾く
-  const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
-
-  if (!ok) {
-    res.status(401).json({ error: '人事用の鍵が正しくありません。' });
-    return false;
-  }
-  return true;
-}
 
 function readBody(req) {
   if (typeof req.body === 'string') {
@@ -110,7 +78,8 @@ module.exports = async function handler(req, res) {
   try {
     /* ---------- 一覧（人事） ---------- */
     if (req.method === 'GET') {
-      if (!checkHr(req, res)) return;
+      const me = await auth.requireRole(req, res, 'viewer');
+      if (!me) return;
       const records = await store.listSessions();
       res.status(200).json({ records });
       return;
@@ -130,7 +99,10 @@ module.exports = async function handler(req, res) {
 
     /* ---------- 合否の記録（人事） ---------- */
     if (req.method === 'PATCH') {
-      if (!checkHr(req, res)) return;
+      // 合否の記録は reviewer 以上。閲覧のみの担当者は押せない。
+      const me = await auth.requireRole(req, res, 'reviewer');
+      if (!me) return;
+
       const body = readBody(req);
       if (!body.id) {
         res.status(400).json({ error: '対象が指定されていません。' });
@@ -139,6 +111,7 @@ module.exports = async function handler(req, res) {
       const record = await store.decideSession(String(body.id), {
         decision: body.decision === undefined ? null : body.decision,
         memo: String(body.memo || '').slice(0, MAX_TEXT),
+        actor: me, // 誰が判断したかを記録に残す
       });
       res.status(200).json({ ok: true, record });
       return;
@@ -151,4 +124,3 @@ module.exports = async function handler(req, res) {
   }
 };
 
-module.exports.hrTokenRequired = hrTokenRequired;
