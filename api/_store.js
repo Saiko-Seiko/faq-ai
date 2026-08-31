@@ -35,6 +35,12 @@ function isEnabled() {
   return !!db();
 }
 
+/* 他のモジュール（_content.js）から同じ接続を使うための入口。
+   返るのはタグ付きテンプレート関数なので、必ず sql`...` の形で使うこと。 */
+function client() {
+  return db();
+}
+
 /* ------------------------------------------------------------
    行 ⇄ 画面で使う形 の変換
    画面側は既存の形（camelCase）のままにしておきたいので、ここで吸収する。
@@ -527,7 +533,7 @@ async function listAudit({ limit = 200, target = null } = {}) {
 }
 
 module.exports = {
-  isEnabled, saveSession, listSessions, decideSession, audit,
+  isEnabled, client, saveSession, listSessions, decideSession, audit,
   countUsers, getUser, authenticate, listUsers, createUser, updateUser, listAudit,
   listCandidates, createCandidate, getCandidate,
   markStarted, markUsed, updateCandidate, statusOf,

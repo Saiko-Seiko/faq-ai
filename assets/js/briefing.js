@@ -17,6 +17,7 @@ const Player = (() => {
   let current = 0;
   let playing = false;
   let timer = null;
+  let video = null;   // 実際の動画がある場合のみ。無ければ疑似プレーヤー。
 
   const el = {
     stage:   document.getElementById('playBtn'),
@@ -33,18 +34,18 @@ const Player = (() => {
 
   function chapterIndexAt(sec) {
     let idx = 0;
-    VIDEO_CHAPTERS.forEach((c, i) => { if (sec >= c.at) idx = i; });
+    Content.video.chapters.forEach((c, i) => { if (sec >= c.at) idx = i; });
     return idx;
   }
 
   function paint() {
-    const pct = (current / VIDEO_DURATION) * 100;
+    const pct = (current / Content.video.duration) * 100;
     el.fill.style.width = `${Math.min(100, pct)}%`;
     el.now.textContent = formatClock(current);
 
     const idx = chapterIndexAt(current);
     el.kicker.textContent = `CHAPTER ${idx + 1}`;
-    el.title.textContent = VIDEO_CHAPTERS[idx].title;
+    el.title.textContent = Content.video.chapters[idx].title;
 
     el.list.querySelectorAll('.chapter').forEach((b, i) => {
       b.setAttribute('aria-current', String(i === idx));
@@ -58,22 +59,24 @@ const Player = (() => {
 
   function tick() {
     current += 1;
-    if (current >= VIDEO_DURATION) {
-      current = VIDEO_DURATION;
+    if (current >= Content.video.duration) {
+      current = Content.video.duration;
       pause();
     }
     paint();
   }
 
   function play() {
+    if (video) { video.play(); return; }
     if (playing) return;
-    if (current >= VIDEO_DURATION) current = 0;
+    if (current >= Content.video.duration) current = 0;
     playing = true;
     timer = setInterval(tick, 1000);
     paint();
   }
 
   function pause() {
+    if (video) { video.pause(); return; }
     playing = false;
     clearInterval(timer);
     timer = null;
@@ -83,12 +86,13 @@ const Player = (() => {
   function toggle() { playing ? pause() : play(); }
 
   function seekTo(sec) {
-    current = Math.max(0, Math.min(VIDEO_DURATION, Math.round(sec)));
+    if (video) { video.currentTime = Math.max(0, Math.min(video.duration || sec, sec)); return; }
+    current = Math.max(0, Math.min(Content.video.duration, Math.round(sec)));
     paint();
   }
 
   function buildChapters() {
-    el.list.innerHTML = VIDEO_CHAPTERS.map((c, i) => `
+    el.list.innerHTML = Content.video.chapters.map((c, i) => `
       <li>
         <button class="chapter" type="button" data-seek="${c.at}" aria-current="${i === 0}">
           <time>${formatClock(c.at)}</time>
@@ -108,16 +112,52 @@ const Player = (() => {
     });
   }
 
+  /* ------------------------------------------------------------
+     Stage 5: 実際の動画が設定されていれば、疑似プレーヤーを差し替える。
+     チャプターの時刻はそのまま video.currentTime に対応する。
+     ------------------------------------------------------------ */
+  function useRealVideo(url) {
+    const stage = document.querySelector('.player__stage');
+    stage.innerHTML = `<video id="realVideo" controls playsinline preload="metadata"
+                              style="width:100%;height:100%;object-fit:contain;background:#000"
+                              src="${escapeHtml(url)}"></video>`;
+
+    const v = document.getElementById('realVideo');
+    video = v;
+
+    v.addEventListener('loadedmetadata', () => {
+      if (v.duration && Number.isFinite(v.duration)) {
+        Content.video.duration = Math.round(v.duration);
+        el.all.textContent = formatClock(Content.video.duration);
+      }
+      paint();
+    });
+    v.addEventListener('timeupdate', () => { current = v.currentTime; paint(); });
+    v.addEventListener('play', () => { playing = true; paint(); });
+    v.addEventListener('pause', () => { playing = false; paint(); });
+  }
+
   function init() {
-    el.all.textContent = formatClock(VIDEO_DURATION);
-    el.sub.textContent = `${COMPANY.name} 会社説明会`;
+    el.all.textContent = formatClock(Content.video.duration);
+    el.sub.textContent = `${Content.company.name} 会社説明会`;
     buildChapters();
+
+    if (Content.video.url) {
+      useRealVideo(Content.video.url);
+      el.barBtn.addEventListener('click', toggle);
+      el.seek.addEventListener('click', (e) => {
+        const rect = el.seek.getBoundingClientRect();
+        seekTo(((e.clientX - rect.left) / rect.width) * Content.video.duration);
+      });
+      paint();
+      return;
+    }
 
     el.stage.addEventListener('click', toggle);
     el.barBtn.addEventListener('click', toggle);
     el.seek.addEventListener('click', (e) => {
       const rect = el.seek.getBoundingClientRect();
-      seekTo(((e.clientX - rect.left) / rect.width) * VIDEO_DURATION);
+      seekTo(((e.clientX - rect.left) / rect.width) * Content.video.duration);
     });
 
     paint();
@@ -191,7 +231,7 @@ function scoreEntry(query, entry) {
 }
 
 function searchKnowledge(query) {
-  return KNOWLEDGE
+  return Content.knowledge
     .map((entry) => ({ entry, score: scoreEntry(query, entry) }))
     .sort((a, b) => b.score - a.score);
 }
@@ -234,7 +274,7 @@ const Chat = (() => {
 
   /* ---------- サジェスト ---------- */
   function paintChips() {
-    const pool = KNOWLEDGE.filter((e) => !asked.has(e.id) && e.id !== 'contact');
+    const pool = Content.knowledge.filter((e) => !asked.has(e.id) && e.id !== 'contact');
     chips.innerHTML = pool.slice(0, 4)
       .map((e) => `<button class="chip" type="button" data-q="${escapeHtml(e.q)}">${escapeHtml(e.q)}</button>`)
       .join('');
@@ -246,7 +286,7 @@ const Chat = (() => {
     const best = ranked[0];
 
     if (!best || best.score < MATCH_THRESHOLD) {
-      const picks = KNOWLEDGE.slice(0, 3).map((e) => e.q);
+      const picks = Content.knowledge.slice(0, 3).map((e) => e.q);
       return {
         text: '申し訳ございません、その内容は私の手元の資料では確認できませんでした。\n'
             + '推測でお答えするとかえってご迷惑をおかけしますので、'
@@ -332,7 +372,7 @@ const Chat = (() => {
 
   function init() {
     bubble('ai', escapeHtml(
-      `${COMPANY.name}の採用担当AIです。ご覧いただきありがとうございます。\n`
+      `${Content.company.name}の採用担当AIです。ご覧いただきありがとうございます。\n`
       + '動画をご覧いただきながら、気になったことを何でもお聞きください。'
       + '勤務時間・給与・福利厚生・選考の流れなど、24時間いつでもお答えします。'
     ));
@@ -367,7 +407,8 @@ const Chat = (() => {
   return { init, send };
 })();
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  await Content.load();   // 人事が編集した内容があれば取り込む
   Player.init();
   Chat.init();
 });

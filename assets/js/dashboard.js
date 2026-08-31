@@ -95,7 +95,7 @@ const Dashboard = (() => {
   }
 
   function paintMeters(rec) {
-    $('meters').innerHTML = AXES.map((axis) => {
+    $('meters').innerHTML = Content.axes.map((axis) => {
       const v = rec.scores[axis.key] ?? 0;
       return `
         <div class="meter" title="${escapeHtml(axis.desc)}">
@@ -270,9 +270,11 @@ const Dashboard = (() => {
       el.innerHTML = '<span class="badge badge--ok">サーバー保存</span> '
         + '記録はデータベースに保存され、他の担当者の画面にも反映されます。';
       $('resetBtn').hidden = true;
-      // 候補者管理はデータベースがある場合のみ意味を持つ
-      const link = $('candLink');
-      if (link) link.hidden = false;
+      // 候補者管理とコンテンツ編集は、データベースがある場合のみ意味を持つ
+      ['candLink', 'contentLink'].forEach((id) => {
+        const link = $(id);
+        if (link) link.hidden = false;
+      });
     } else {
       el.innerHTML = '<span class="badge">この端末のみ</span> '
         + 'デモ表示です。記録はご覧の端末内にのみ保存され、他の方には共有されません。';
@@ -296,6 +298,7 @@ const Dashboard = (() => {
   /* ---------- 初期化 ---------- */
   async function init() {
     await Mode.ready();      // 保存先がサーバーかどうか
+    await Content.load();    // 評価軸の表記を取り込む
     await Auth.ensure();     // サーバー保存ならログインを求める
     Auth.paintWho();
 

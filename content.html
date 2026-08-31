@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>コンテンツ編集｜AI採用システム</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="assets/css/base.css">
+<style>
+  .page-head { padding: 24px 0 14px; }
+  .page-head h1 { font-size: clamp(19px, 3.2vw, 24px); }
+  .page-head p { margin: 6px 0 0; font-size: 13.5px; color: var(--text-muted); }
+
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+  .tab {
+    padding: 9px 15px; border: 0; background: transparent; cursor: pointer;
+    font-size: 13.5px; font-weight: 700; color: var(--text-muted);
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.is-on { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .edit-item {
+    padding: 14px; border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface); margin-bottom: 12px;
+  }
+  .edit-item__head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  .save-bar {
+    position: sticky; bottom: 0; z-index: 20;
+    display: flex; gap: 12px; align-items: center;
+    padding: 12px 16px; margin-top: 16px;
+    background: var(--surface); border: 1px solid var(--accent);
+    border-radius: var(--radius); box-shadow: var(--shadow-lg);
+  }
+  .save-bar[hidden] { display: none !important; }
+
+  .field-row { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 700px) { .field-row { grid-template-columns: 1fr; } }
+
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header__inner">
+    <a class="brand" href="index.html"><span class="brand__mark">AI</span>AI採用システム</a>
+    <span class="site-header__spacer"></span>
+    <nav class="site-nav">
+      <a href="dashboard.html">選考状況</a>
+      <a href="candidates.html">候補者管理</a>
+      <a href="content.html" aria-current="page">コンテンツ編集</a>
+      <a href="team.html">担当者管理</a>
+    </nav>
+    <span id="whoami" class="site-who" hidden></span>
+    <span data-settings-slot></span>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="page-head">
+    <h1>コンテンツ編集</h1>
+    <p>チャットが答える内容、面接の設問、会社情報をここで書き換えられます。開発者への依頼は不要です。</p>
+  </div>
+
+  <div class="card card__pad stack" id="needsDb" hidden style="max-width:620px">
+    <span class="badge badge--warn">データベース未接続</span>
+    <h2 style="font-size:17px">この画面はデモでは使用できません</h2>
+    <p class="muted" style="margin:0;font-size:13.5px">
+      編集内容の保存には、データベースが必要です。
+    </p>
+    <a class="btn btn--ghost" href="index.html">トップへ戻る</a>
+  </div>
+
+  <div class="card card__pad stack" id="needsAdmin" hidden style="max-width:620px">
+    <span class="badge badge--warn">権限が足りません</span>
+    <h2 style="font-size:17px">この画面は管理者のみが使用できます</h2>
+    <a class="btn btn--ghost" href="dashboard.html">選考状況へ戻る</a>
+  </div>
+
+  <div id="main">
+
+    <div class="note note--warn" id="notSeeded" hidden style="margin-bottom:16px">
+      まだ編集内容が保存されていないため、<strong>サンプルの会社情報</strong>が表示されています。
+      「初期値を読み込む」で編集を始めるか、直接書き換えて保存してください。
+    </div>
+
+    <div class="tabs">
+      <button class="tab is-on" type="button" data-tab="knowledge">ナレッジ（チャットの回答）</button>
+      <button class="tab" type="button" data-tab="questions">面接の設問</button>
+      <button class="tab" type="button" data-tab="settings">会社情報・動画・評価軸</button>
+    </div>
+
+    <!-- ============ ナレッジ ============ -->
+    <section data-panel="knowledge">
+      <div class="note" style="margin-bottom:14px">
+        チャットはここに書かれた内容<strong>だけ</strong>を根拠に答えます。
+        書かれていないことには「採用担当へお繋ぎします」と返します。
+        検索語には、応募者が使いそうな言い回しを並べてください（例：残業、残業時間、忙しい）。
+      </div>
+      <div id="kList"></div>
+      <button class="btn btn--ghost" type="button" id="kAdd">＋ 項目を追加</button>
+    </section>
+
+    <!-- ============ 設問 ============ -->
+    <section data-panel="questions" hidden>
+      <div class="note" style="margin-bottom:14px">
+        ここに並べた設問が、その順番で応募者に表示されます。
+        最後に、直前の回答をふまえた深掘り質問が1問だけ自動で追加されます（この一覧には出ません）。
+      </div>
+      <div id="qList"></div>
+      <button class="btn btn--ghost" type="button" id="qAdd">＋ 設問を追加</button>
+    </section>
+
+    <!-- ============ 設定 ============ -->
+    <section data-panel="settings" hidden>
+      <div class="card card__pad" style="margin-bottom:16px">
+        <h2 style="font-size:15px;margin-bottom:12px">会社情報</h2>
+        <div class="field-row">
+          <label class="field">
+            <span class="field__label">会社名</span>
+            <input class="input" id="cName">
+          </label>
+          <label class="field">
+            <span class="field__label">ひとこと紹介</span>
+            <input class="input" id="cTagline">
+          </label>
+        </div>
+      </div>
+
+      <div class="card card__pad" style="margin-bottom:16px">
+        <h2 style="font-size:15px;margin-bottom:12px">会社説明会の動画</h2>
+        <label class="field">
+          <span class="field__label">動画のURL</span>
+          <input class="input" id="vUrl" placeholder="https://… （mp4 など。空にするとサンプル表示のままになります）">
+          <span class="hint">
+            動画配信サービスの直リンク（mp4）を想定しています。
+            設定すると、説明会ページのプレースホルダーが実際の動画に置き換わります。
+          </span>
+        </label>
+        <label class="field" style="margin-top:12px;max-width:200px">
+          <span class="field__label">動画の長さ（秒）</span>
+          <input class="input" id="vDuration" type="number" min="1">
+        </label>
+        <label class="field" style="margin-top:12px">
+          <span class="field__label">チャプター</span>
+          <textarea class="textarea mono" id="vChapters" style="min-height:130px"></textarea>
+          <span class="hint">
+            1行に1つ。<strong>「時間」→Tab→「タイトル」→Tab→「関連する質問」</strong>の順で入力してください。<br>
+            例：<code>1:15	事業紹介	どんな技術を使っていますか？</code>
+          </span>
+        </label>
+      </div>
+
+      <div class="card card__pad">
+        <h2 style="font-size:15px;margin-bottom:6px">評価軸</h2>
+        <p class="hint" style="margin:0 0 12px">
+          AI面接の採点の観点です。「評価の観点」に書いた内容が、そのままAIへの指示になります。
+        </p>
+        <div id="axList"></div>
+      </div>
+    </section>
+
+    <!-- 保存 -->
+    <div class="save-bar" id="saveBar" hidden>
+      <strong style="font-size:13.5px">変更が保存されていません</strong>
+      <span style="flex:1"></span>
+      <button class="btn btn--ghost btn--sm" type="button" id="seedBtn">初期値を読み込む</button>
+      <button class="btn" type="button" id="saveBtn">保存する</button>
+    </div>
+
+    <p class="note note--ok" id="savedNote" hidden style="margin-top:16px">保存しました。次に開いた画面から反映されます。</p>
+
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">AI採用システム ／ コンテンツ編集は管理者専用の画面です。</div>
+</footer>
+
+<script src="assets/js/knowledge.js"></script>
+<script src="assets/js/interview-data.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="assets/js/content.js"></script>
+<script src="assets/js/content-admin.js"></script>
+</body>
+</html>

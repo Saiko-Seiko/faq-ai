@@ -10,28 +10,35 @@
    ============================================================ */
 
 const { ask, guard, fail } = require('./_claude.js');
-const { COMPANY } = require('../assets/js/knowledge.js');
-const { AXES } = require('../assets/js/interview-data.js');
+const content = require('./_content.js');
 
 const MAX_ANSWERS = 12;
 const MAX_CHARS = 4000;
 
-const EVAL_SYSTEM = [
-  `あなたは${COMPANY.name}の採用一次スクリーニングを補助するAIです。`,
-  '候補者のオンライン面接の回答を読み、4つの観点で評価してください。',
-  '',
-  '評価軸（各1〜5点の整数）:',
-  ...AXES.map((a) => `- ${a.key}（${a.label}）: ${a.desc}`),
-  '',
-  '守ること:',
-  '1. 回答に書かれている事実だけを根拠にする。書かれていないことを補って評価しない。',
-  '2. 合否は判定しない。あなたの役割はスコアと所見の作成まで。',
-  '3. 年齢・性別・出身・国籍・家族構成・信条など、業務と関係のない属性を評価に含めない。',
-  '4. comment には、各点数の根拠を候補者の発言に触れながら日本語で書く（300文字程度）。',
-  '',
-  '出力は次のJSONのみ。前後に説明文やコードブロックを付けないこと:',
-  '{"motivation":3,"experience":4,"communication":3,"culture":4,"comment":"…"}',
-].join('\n');
+/* 編集されていない場合に使う評価軸 */
+const DEFAULT_AXES = require('../assets/js/interview-data.js').AXES;
+
+/* Stage 5: 社名と評価軸の表記は人事が編集できる。
+   軸のキー（motivation など）は記録と結びつくため変更しない。 */
+function buildEvalSystem(company, axes) {
+  const sample = axes.reduce((o, a) => ({ ...o, [a.key]: 3 }), {});
+  return [
+    `あなたは${company.name}の採用一次スクリーニングを補助するAIです。`,
+    `候補者のオンライン面接の回答を読み、${axes.length}つの観点で評価してください。`,
+    '',
+    '評価軸（各1〜5点の整数）:',
+    ...axes.map((a) => `- ${a.key}（${a.label}）: ${a.desc}`),
+    '',
+    '守ること:',
+    '1. 回答に書かれている事実だけを根拠にする。書かれていないことを補って評価しない。',
+    '2. 合否は判定しない。あなたの役割はスコアと所見の作成まで。',
+    '3. 年齢・性別・出身・国籍・家族構成・信条など、業務と関係のない属性を評価に含めない。',
+    '4. comment には、各点数の根拠を候補者の発言に触れながら日本語で書く（300文字程度）。',
+    '',
+    '出力は次のJSONのみ。前後に説明文やコードブロックを付けないこと:',
+    JSON.stringify({ ...sample, comment: '…' }),
+  ].join('\n');
+}
 
 const FOLLOWUP_SYSTEM = [
   'あなたは採用面接官です。候補者の回答を読み、もう一歩踏み込んで聞く質問を1つだけ作ってください。',
@@ -93,8 +100,13 @@ module.exports = async function handler(req, res) {
       .map((a, i) => `【質問${i + 1}】${a.question}\n【回答】${a.text || '（無回答）'}`)
       .join('\n\n');
 
+    const [company, axes] = await Promise.all([
+      content.getSetting('company', { name: '当社' }),
+      content.getSetting('axes', null).then((a) => (Array.isArray(a) && a.length ? a : DEFAULT_AXES)),
+    ]);
+
     const text = await ask({
-      system: EVAL_SYSTEM,
+      system: buildEvalSystem(company, axes),
       messages: [{ role: 'user', content: transcript }],
       maxTokens: 4096,
       effort: 'high', // 人の選考に関わる判断なので、速度より精度を優先する
@@ -107,7 +119,7 @@ module.exports = async function handler(req, res) {
     }
 
     const scores = {};
-    for (const axis of AXES) {
+    for (const axis of axes) {
       const v = Number(parsed[axis.key]);
       scores[axis.key] = Number.isFinite(v) ? clamp5(v) : 3;
     }

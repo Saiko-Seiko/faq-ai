@@ -9,15 +9,20 @@
    ============================================================ */
 
 const { ask, guard, fail } = require('./_claude.js');
-const { COMPANY, KNOWLEDGE } = require('../assets/js/knowledge.js');
+const content = require('./_content.js');
 
 const MAX_TURNS = 20;
 const MAX_CHARS = 2000;
 
-/* 毎回同じ内容にしておくこと（プロンプトキャッシュが効く条件）。
-   日時など変動する値をここに混ぜてはいけない。 */
-const SYSTEM_PROMPT = [
-  `あなたは${COMPANY.name}の採用担当AIです。会社説明会ページで、求職者からの質問に答えます。`,
+/* Stage 5: ナレッジと社名は人事が画面から編集できる。
+   編集されていなければ、リポジトリ内の定義がそのまま使われる。
+
+   プロンプトは同じ内容であるほどキャッシュが効くので、
+   ナレッジが変わらないかぎり同じ文字列になるよう組み立てる。
+   日時など変動する値は混ぜないこと。 */
+function buildSystemPrompt(company, knowledge) {
+  return [
+  `あなたは${company.name}の採用担当AIです。会社説明会ページで、求職者からの質問に答えます。`,
   '',
   '守ること:',
   '1. 回答は必ず下記の「社内資料」の内容だけを根拠にすること。書かれていないことは推測で答えない。',
@@ -28,8 +33,9 @@ const SYSTEM_PROMPT = [
   '6. 応募者本人の年齢・性別・家族構成などを尋ねないこと。',
   '',
   '=== 社内資料 ===',
-  KNOWLEDGE.map((e) => `## ${e.category}｜${e.q}\n${e.a}`).join('\n\n'),
-].join('\n');
+  knowledge.map((e) => `## ${e.category}｜${e.q}\n${e.a}`).join('\n\n'),
+  ].join('\n');
+}
 
 module.exports = async function handler(req, res) {
   const body = guard(req, res);
@@ -53,8 +59,13 @@ module.exports = async function handler(req, res) {
   }
 
   try {
+    const [knowledge, company] = await Promise.all([
+      content.getKnowledge(),
+      content.getSetting('company', { name: '当社' }),
+    ]);
+
     const text = await ask({
-      system: SYSTEM_PROMPT,
+      system: buildSystemPrompt(company, knowledge),
       messages: safe,
       maxTokens: 2048,
       effort: 'low', // 資料を引く用途。速度を優先する

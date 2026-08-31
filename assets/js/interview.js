@@ -41,7 +41,7 @@ function evaluateByRules(answers) {
   const motivationText = answersFor(answers, 'motivation');
   const mLen = motivationText.replace(/\s/g, '').length;
   // 会社の実情に触れているか（ナレッジのキーワードと突き合わせる）
-  const companyRefs = KNOWLEDGE
+  const companyRefs = Content.knowledge
     .flatMap((e) => e.keywords)
     .filter((kw) => kw.length >= 2 && motivationText.includes(kw)).length;
   let motivation = 1 + Math.min(2, mLen / 90) + Math.min(2, companyRefs * 0.7);
@@ -90,7 +90,7 @@ function evaluateByRules(answers) {
   const total = Object.values(scores).reduce((s, n) => s + n, 0);
 
   const comment = [
-    `${AXES.map((a) => `${a.label}${scores[a.key]}点`).join('／')}の計${total}点（20点満点）。`,
+    `${Content.axes.map((a) => `${a.label}${scores[a.key]}点`).join('／')}の計${total}点（20点満点）。`,
     ...notes.map((n) => `・${n}`),
     '',
     '※この評価は一次スクリーニングの参考値です。合否は人事担当者が回答内容を確認したうえで判断してください。',
@@ -274,11 +274,11 @@ const Interview = (() => {
 
     // 共通質問を終えた時点で、最後の1問（深掘り）の内容を確定させる。
     // 枠は最初から queue に入れてあるので、質問数の表示はぶれない。
-    if (!followUpUsed && index === QUESTIONS.length - 1) {
+    if (!followUpUsed && index === Content.questions.length - 1) {
       followUpUsed = true;
       $('nextBtn').disabled = true;
       $('nextBtn').textContent = '考えています…';
-      queue[QUESTIONS.length].text = await followUpQuestion(answers);
+      queue[Content.questions.length].text = await followUpQuestion(answers);
       $('nextBtn').disabled = false;
     }
 
@@ -407,7 +407,8 @@ const Interview = (() => {
       screens[k] = document.getElementById(`screen-${k}`);
     });
 
-    await Mode.ready(); // 候補者の管理がサーバー側かどうかを先に確かめる
+    await Mode.ready();      // 候補者の管理がサーバー側かどうか
+    await Content.load();    // 人事が編集した設問・会社情報を取り込む
 
     const found = await resolveCandidate();
     if (!found) { paintInvalid(); return; }
@@ -420,7 +421,7 @@ const Interview = (() => {
 
     $('introName').textContent = candidate.name;
     $('introRole').textContent = candidate.role;
-    $('introCount').textContent = `${QUESTIONS.length + 1}問`;
+    $('introCount').textContent = `${Content.questions.length + 1}問`;
 
     // 有効期限があれば伝える（いつまでに受ければよいかが分からないと困る）
     if (candidate.expiresAt) {
@@ -455,7 +456,7 @@ const Interview = (() => {
 
       startedAt = new Date();
       // 共通質問＋深掘り1問ぶんの枠。深掘りの文面は5問目の回答後に埋める。
-      queue = QUESTIONS.concat([{ id: 'follow', axis: 'communication', text: '', hint: '' }]);
+      queue = Content.questions.concat([{ id: 'follow', axis: 'communication', text: '', hint: '' }]);
       index = 0;
       show('question');
       paintQuestion();
